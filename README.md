@@ -76,6 +76,19 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
    git push
    ```
 
+   > ⚠️ **本次生成的仓库需要先做一次转换**：构建环境里没有安装 git-lfs，
+   > 所以初始提交里的 3 个示例 PSD 目前是**普通 Git 对象**（约为 11 MiB，能正常 push，
+   > 只是因为 `.gitattributes` 已声明规则）。在你自己的机器上执行一次即可把历史里的
+   > PSD 全部转成 LFS 对象：
+   >
+   > ```bash
+   > git lfs install
+   > git lfs migrate import --include="*.psd" --everything
+   > git push --force-with-lease        # 仅当远程还没有别人拉取过时
+   > ```
+   >
+   > 之后再新增的 PSD 会自动走 LFS，不需要再迁移。
+
 2. **推送代码**。`.github/workflows/deploy.yml` 会在 push 到 `main` 时自动：
    检出（含 LFS）→ `npm ci` → `npm run manifest` → 单元测试 → `npm run build`
    → 发布到 GitHub Pages。
