@@ -74,29 +74,23 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
 
 ## 部署到 GitHub Pages
 
-1. **安装 Git LFS（必须）**。GitHub 拒绝任何超过 100 MiB 的单个文件，
-   带图层的 PSD 很容易超；仓库里的 `.gitattributes` 已把 `*.psd` 指向 LFS：
+> **当前状态**：仓库已推到 <https://github.com/juhkff/psd-gallery>，分支 `main`，
+> **还没有打任何 tag**，所以尚未构建部署。Pages 已开启（Source = GitHub Actions），
+> 打第一个 tag 后就会发布到 <https://juhkff.github.io/psd-gallery/>。
+
+1. **Git LFS 已经配置好了**，无需再迁移：仓库里的 `works/*.psd` 都已经是 LFS 对象
+   （远程是 132 字节的指针，LFS 存储里是真实文件）。`.gitattributes` 把 `*.psd`、
+   `*.psb`、`*.tif(f)` 指向 LFS，之后新增的 PSD 会自动走 LFS。
+
+   在**新机器上克隆**时要先装 git-lfs，否则拿到的是指针文件而不是图片：
 
    ```bash
-   git lfs install
-   git add .gitattributes
-   git add works/2026-09-21/1.psd     # 会走 LFS，而不是普通对象
-   git commit -m "add works"
-   git push
+   git lfs install          # 只需一次；未装则 clone 出来的是指针
+   git clone https://github.com/juhkff/psd-gallery.git
    ```
 
-   > ⚠️ **本次生成的仓库需要先做一次转换**：构建环境里没有安装 git-lfs，
-   > 所以初始提交里的 3 个示例 PSD 目前是**普通 Git 对象**（约为 11 MiB，能正常 push，
-   > 只是因为 `.gitattributes` 已声明规则）。在你自己的机器上执行一次即可把历史里的
-   > PSD 全部转成 LFS 对象：
-   >
-   > ```bash
-   > git lfs install
-   > git lfs migrate import --include="*.psd" --everything
-   > git push --force-with-lease        # 仅当远程还没有别人拉取过时
-   > ```
-   >
-   > 之后再新增的 PSD 会自动走 LFS，不需要再迁移。
+   装好后再克隆，`works/*.psd` 才是真正的 PSD（可用 `head -c 4 file.psd` 验证是否为 `8BPS`）。
+   如果已经克隆成了指针，在该仓库里执行 `git lfs install --local && git lfs pull` 即可补回。
 
 2. **只有打 tag 才会构建部署**。`git push` 代码（无论 push 到 `main` 还是别的分支）
    **不会**触发构建；发布一个新版本靠打 tag：
