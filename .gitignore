@@ -23,3 +23,6 @@ __pycache__/
 
 # Scaling benchmark scratch output (scripts/bench-scale.ts)
 public/generated-scale/
+
+# Screenshot/scratch output (scripts/screenshot.ts)
+.bench-output/

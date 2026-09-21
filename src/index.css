@@ -4,21 +4,96 @@
  * Tailwind 4 is CSS-first: design tokens live here, not in a JS config.
  * The app is a dark "studio" surface so the artwork is the brightest thing on
  * screen and colour judgement is not thrown off by a light chrome.
+ *
+ * The timeline/motion vocabulary of the whole app is defined here so every
+ * surface (gallery rail, viewer, layer panel) animates identically.
  */
 @theme {
-  --color-studio-950: #0b0b0f;
-  --color-studio-900: #121218;
-  --color-studio-800: #1a1a22;
-  --color-studio-700: #26262f;
-  --color-studio-600: #3a3a46;
+  --color-studio-950: #08080b;
+  --color-studio-900: #101017;
+  --color-studio-800: #17171f;
+  --color-studio-700: #24242e;
+  --color-studio-600: #383843;
+  --color-studio-400: #6b6b7a;
   --color-studio-300: #b9b9c6;
   --color-studio-100: #ececf2;
   --color-accent: #c9a227;
+  --color-accent-soft: #e6c65c;
+  /* Secondary hue for the timeline gradient: a warm graphite-to-amber sweep. */
+  --color-ember: #b45f3f;
+
+  --font-display:
+    'Iowan Old Style', 'Palatino Linotype', 'Songti SC', 'Noto Serif SC',
+    ui-serif, Georgia, serif;
+
+  --animate-fade-up: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-raise: raise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pulse-ring: pulse-ring 2.4s ease-out infinite;
+  --animate-shimmer: shimmer 1.8s linear infinite;
+  --animate-drift: drift 26s ease-in-out infinite alternate;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes raise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 26px, 0) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 55%, transparent);
+    }
+    70% {
+      box-shadow: 0 0 0 10px transparent;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: -160% 0;
+    }
+    to {
+      background-position: 260% 0;
+    }
+  }
+  @keyframes drift {
+    from {
+      transform: translate3d(-2%, -1%, 0) scale(1.05);
+    }
+    to {
+      transform: translate3d(2%, 1.5%, 0) scale(1.12);
+    }
+  }
 }
 
 @layer base {
   html {
     color-scheme: dark;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -43,9 +118,32 @@
     background: var(--color-studio-700);
     border-radius: 6px;
   }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-studio-600);
+  }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+    color: var(--color-studio-100);
+  }
+}
+
+/*
+ * The ambient背景: two slow warm/cool pools behind a fine grain. Purely
+ * decorative and pointer-transparent so it can never intercept a click.
+ */
+@utility studio-backdrop {
+  background-image:
+    radial-gradient(60rem 40rem at 12% -10%, rgba(201, 162, 39, 0.13), transparent 70%),
+    radial-gradient(50rem 36rem at 88% 8%, rgba(120, 96, 200, 0.12), transparent 72%),
+    radial-gradient(44rem 30rem at 50% 108%, rgba(180, 95, 63, 0.1), transparent 70%);
+}
+
+@utility grain-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
 }
 
 @utility checkerboard {
@@ -59,4 +157,81 @@
   background-position:
     0 0, 0 8px, 8px -8px, -8px 0;
   background-color: #202028;
+}
+
+/* Frosted panel used by the timeline, viewer chrome and floating controls. */
+@utility glass {
+  background: color-mix(in oklab, var(--color-studio-900) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--color-studio-100) 9%, transparent);
+}
+
+@utility text-gradient-gold {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-accent-soft),
+    var(--color-accent) 45%,
+    var(--color-ember)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/*
+ * Scroll reveal. Elements start hidden and animate in when `<html>` gets
+ * `.reveal-ready` (added by the observer hook) plus `.is-visible` on the node.
+ * Without JS, or with reduced motion, content is simply visible.
+ */
+@layer utilities {
+  .reveal {
+    opacity: 1;
+  }
+
+  .reveal-ready .reveal {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+    transition:
+      opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+
+  .reveal-ready .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  .shimmer-line {
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklab, var(--color-studio-100) 14%, transparent) 50%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal-ready .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

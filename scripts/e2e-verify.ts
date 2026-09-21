@@ -48,7 +48,14 @@ const MIME: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
 };
 
-function startStaticServer(): Promise<http.Server> {
+/**
+ * Listen on the requested port, or on an ephemeral one if it is taken.
+ *
+ * The harness must not assume a fixed port: a developer (or CI step) may
+ * already have `npm run preview` on 4173, and failing with EADDRINUSE would
+ * look like a product bug rather than a busy port.
+ */
+function startStaticServer(): Promise<{ server: http.Server; port: number }> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html';
@@ -67,7 +74,29 @@ function startStaticServer(): Promise<http.Server> {
     });
     res.end(body);
   });
-  return new Promise((resolve) => server.listen(PORT, '127.0.0.1', () => resolve(server)));
+
+  return new Promise((resolve, reject) => {
+    const onError = (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EADDRINUSE' || server.listening) {
+        reject(error);
+        return;
+      }
+      // Port busy: retry on an OS-assigned one.
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        const port = typeof address === 'object' && address ? address.port : 0;
+        console.log(`  (port ${PORT} busy, using ${port} instead)`);
+        resolve({ server, port });
+      });
+    };
+    server.once('error', onError);
+    server.listen(PORT, '127.0.0.1', () => {
+      server.off('error', onError);
+      server.on('error', reject);
+      resolve({ server, port: PORT });
+    });
+  });
 }
 
 /** md5 of the canvas pixels: proves the composite actually changed. */
@@ -233,7 +262,7 @@ async function main() {
     `display ${displaySize.format} ${displaySize.width}x${displaySize.height}`,
   );
 
-  const server = await startStaticServer();
+  const { server, port } = await startStaticServer();
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: true,
@@ -252,7 +281,7 @@ async function main() {
     (page as unknown as { on: (e: string, cb: (r: { url: () => string; resourceType: () => string }) => void) => void })
       .on('request', (r) => requests.push({ url: r.url(), type: r.resourceType() }));
 
-    await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'networkidle2', timeout: 60000 });
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle2', timeout: 60000 });
 
     // --- gallery -----------------------------------------------------------
     await page.waitForFunction(
@@ -273,6 +302,39 @@ async function main() {
       imgs.length > 0 && imgs.every((i) => (i as HTMLImageElement).naturalWidth > 0));
     check('thumbnails load as real images', thumbOk, 'all tile <img> have naturalWidth > 0');
 
+    // A decodable image of the right size can still be a black rectangle: ag-psd's
+    // writer emits an all-black composite for layered documents, and the manifest
+    // builder renders previews FROM that composite. Check real pixels, not headers.
+    const thumbPixels = await page.evaluate(`(async () => {
+      const imgs = Array.from(document.querySelectorAll('[data-testid="work-tile"] img'));
+      const out = [];
+      for (const img of imgs) {
+        if (!img.naturalWidth) { out.push({ src: img.currentSrc, max: -1 }); continue; }
+        const c = document.createElement('canvas');
+        c.width = Math.min(80, img.naturalWidth);
+        c.height = Math.min(80, img.naturalHeight);
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        const d = ctx.getImageData(0, 0, c.width, c.height).data;
+        let max = 0, sum = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const l = (d[i] + d[i + 1] + d[i + 2]) / 3;
+          if (l > max) max = l;
+          sum += l; n++;
+        }
+        out.push({ src: img.currentSrc, max: Math.round(max), avg: Math.round(sum / Math.max(n, 1)) });
+      }
+      return out;
+    })()`) as { src: string; max: number; avg: number }[];
+    const blackThumbs = thumbPixels.filter((t) => t.max <= 8);
+    check(
+      'thumbnails contain real pixels (not an all-black composite)',
+      thumbPixels.length > 0 && blackThumbs.length === 0,
+      blackThumbs.length
+        ? `black: ${blackThumbs.map((t) => t.src.split('/').pop()).join(', ')}`
+        : thumbPixels.map((t) => `${t.src.split('/').pop()}(avg ${t.avg})`).join(', '),
+    );
+
     // --- open a work -------------------------------------------------------
     const t0 = Date.now();
     await page.click('[data-testid="work-tile"]');
@@ -291,6 +353,47 @@ async function main() {
 
     const before = await canvasHash(page);
     check('canvas renders the composite', !before.startsWith('no-'), `canvas probe ${before}`);
+
+    // REGRESSION GUARD: the live composite must actually look like the work.
+    //
+    // Two real bugs shipped through an all-green e2e because every check only
+    // proved "toggling changed something": an inverted draw order, and a sample
+    // whose layer alpha decoded as opaque, both produced a flat fill. Comparing
+    // the live canvas against the build-time preview catches both - a flat fill
+    // has almost no colour buckets while real artwork has many.
+    const likeness = await page.evaluate(`(() => {
+      const canvas = document.querySelector('[data-testid="work-canvas"]');
+      const preview = document.querySelector('img[src*="display"]');
+      if (!canvas || !preview) return null;
+      const stats = (src) => {
+        const t = document.createElement('canvas');
+        t.width = 64; t.height = 64;
+        const x = t.getContext('2d');
+        x.drawImage(src, 0, 0, 64, 64);
+        const d = x.getImageData(0, 0, 64, 64).data;
+        let sum = 0, n = 0;
+        const buckets = new Set();
+        for (let i = 0; i < d.length; i += 4) {
+          sum += (d[i] + d[i + 1] + d[i + 2]) / 3;
+          n++;
+          buckets.add(((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3));
+        }
+        return { avg: sum / n, buckets: buckets.size };
+      };
+      return { live: stats(canvas), preview: stats(preview) };
+    })()`) as { live: { avg: number; buckets: number }; preview: { avg: number; buckets: number } } | null;
+    if (!likeness) {
+      check('live composite resembles the build-time preview', false, 'live canvas or preview image missing');
+    } else {
+      const { live, preview } = likeness;
+      const closeAvg = Math.abs(live.avg - preview.avg) <= 25;
+      const enoughColour = live.buckets >= Math.max(8, preview.buckets * 0.4);
+      check(
+        'live composite resembles the build-time preview (not a flat fill)',
+        closeAvg && enoughColour,
+        `live avg ${live.avg.toFixed(0)}/${live.buckets} buckets vs preview avg ${preview.avg.toFixed(0)}/${preview.buckets} buckets`,
+      );
+    }
 
     // --- toggle a layer ----------------------------------------------------
     const toggleSelector = '[data-testid="layer-toggle"]';
@@ -361,7 +464,7 @@ async function main() {
     );
     const opened = /\/works\/(\d{4}-\d{2}-\d{2})\/([^/]+)\.psd$/.exec(downloadUrl);
     const expectedOpenedMd5 = opened ? md5OfSource(opened[1], opened[2]) : '';
-    const response = await fetch(new URL(downloadUrl, `http://127.0.0.1:${PORT}/`));
+    const response = await fetch(new URL(downloadUrl, `http://127.0.0.1:${port}/`));
     const body = Buffer.from(await response.arrayBuffer());
     const gotMd5 = crypto.createHash('md5').update(body).digest('hex');
     check(
@@ -375,7 +478,7 @@ async function main() {
     const wrong: string[] = [];
     for (const group of manifest.groups) {
       for (const work of group.works as unknown as { name: string; psd: string }[]) {
-        const res = await fetch(new URL(work.psd, `http://127.0.0.1:${PORT}/`));
+        const res = await fetch(new URL(work.psd, `http://127.0.0.1:${port}/`));
         const buf = Buffer.from(await res.arrayBuffer());
         const md5 = crypto.createHash('md5').update(buf).digest('hex');
         const want = md5OfSource(group.date, work.name);

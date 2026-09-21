@@ -73,6 +73,16 @@ function serve(): Promise<http.Server> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+
+    // This probe substitutes a synthetic manifest whose dates are not in the
+    // real deploy index. Serving the real index-dates.json would make every
+    // synthetic work look "unbuilt" and add extra date headings, which is
+    // noise for a pagination measurement - so the section is switched off here.
+    if (rel === 'generated/index-dates.json') {
+      res.writeHead(404, { 'Content-Type': 'text/plain' }).end('disabled for this probe');
+      return;
+    }
+
     let file = path.join(DIST, rel || 'index.html');
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html');
     const body = fs.readFileSync(file);

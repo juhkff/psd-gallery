@@ -175,8 +175,19 @@ function groupAlphaByLayer(flat: readonly FlatLayer[]): Map<string, number> {
 }
 
 /**
- * Bottom-first list of the layers that must actually be drawn, already mapped to
- * proxy pixels and `globalCompositeOperation` values.
+ * Draw list: the layers that must actually be painted, in **bottom-most first**
+ * order, already mapped to proxy pixels and `globalCompositeOperation` values.
+ *
+ * `flattenLayers` is pre-order over ag-psd's `children`, which Photoshop lists
+ * TOP-MOST FIRST, so the last flatten entry is the bottom-most layer and painting
+ * must walk the flatten BACKWARDS.
+ *
+ * This was investigated after a report that the live canvas showed a flat fill.
+ * Pixel-diffing against ag-psd's own `getCompositeCanvas()` for the same document
+ * proved the order is correct (mean |diff| per channel 0.0 for a PSD whose layer
+ * records are ordered properly). The real defect was in the sample PSDs, whose
+ * layer records were written inverted - see scripts/samples/generate_samples.py.
+ * Do NOT "fix" a flat composite by flipping this loop.
  *
  * `plan` is only needed for proxy rendering; without it document pixels are used.
  */
@@ -192,7 +203,7 @@ export function planComposite(
   const scaleY = plan && plan.scaleY > 0 ? plan.scaleY : 1;
 
   const out: PlannedLayer[] = [];
-  // Reverse pre-order == bottom-most layer first.
+  // Backwards over a top-first flatten == bottom-most layer painted first.
   for (let index = flat.length - 1; index >= 0; index -= 1) {
     const layer = flat[index];
     if (isFolder(layer) || !layer.hasImage) continue;
