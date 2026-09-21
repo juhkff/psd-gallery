@@ -71,6 +71,21 @@ UI 会提示。
 2. **实时合成必须与构建时预览图相似**（亮度差 ≤25 且颜色分桶数 ≥ 预览的 40%）
    —— 平色块只有个位数颜色分桶，一测就露。
 
+## 部署触发：只有 tag 才构建
+
+普通 `git push` 代码**不构建**；只有推送 `v*` 形式的 tag 才构建部署。
+
+机制：`deploy.yml` 的 push 触发**只写 `tags: ['v*']`，不写 `branches`**。
+GitHub Actions 的分支过滤与标签过滤互相独立，分支引用不可能匹配标签模式，
+因此「只 push 代码」一定不触发。反过来，如果同时写了 `branches` 和 `tags`，
+两者任一匹配都会触发——这正是需要避免的。
+
+`git push --follow-tags` 会部署（它推了 tag），这点写进了 README 避免误解。
+
+触发规则有自动化校验 `npm run verify-workflows`：解析真实工作流 YAML，按 GitHub
+的 push 过滤规则断言分支 push 不触发、版本 tag 触发。已验证该校验能捕获两种回归
+——重新加入 `branches:` 过滤，以及把 `tags:` 换成 `tags-ignore: ['**']`。
+
 ## 验证覆盖（最终版）
 
 | 验证 | 结果 |

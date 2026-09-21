@@ -66,6 +66,7 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
 | `npm test:e2e` | 用真实 headless Chrome 跑端到端验收（需先 `npm run build`） |
 | `npm run verify:proxy` | 生成一张 8.3 MP 的临时 PSD，验证代理缩放路径后自动清理 |
 | `npm run verify:scale` | 用合成 manifest 验证「日期很多」时首屏仍然有界（分页生效） |
+| `npm run verify:workflows` | 校验 CI 触发规则：分支 push 不构建、版本 tag 才构建 |
 | `npm run bench:scale` | 生成 N 个临时 PSD，实测构建耗时 / 产物体积 / DOM 规模随作品数增长 |
 | `npm run typecheck` | 全项目类型检查 |
 
@@ -97,18 +98,32 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
    >
    > 之后再新增的 PSD 会自动走 LFS，不需要再迁移。
 
-2. **推送代码**。`.github/workflows/deploy.yml` 会在 push 到 `main` 时自动：
-   检出（含 LFS）→ `npm ci` → `npm run manifest` → 单元测试 → `npm run build`
-   → 发布到 GitHub Pages。
+2. **只有打 tag 才会构建部署**。`git push` 代码（无论 push 到 `main` 还是别的分支）
+   **不会**触发构建；发布一个新版本靠打 tag：
 
-   **推送 tag 不会触发构建**。触发条件只写了 `branches: [main]`，并额外写了
-   `tags-ignore: ['**']`：GitHub Actions 的分支过滤和标签过滤是**互相独立**的，
-   只写 `branches` 的工作流本来就不会被 tag 触发，显式写 `tags-ignore` 是为了
-   把这条规则写死——将来有人误加 `tags:` 时不会悄悄把 tag 构建打开。
-   所以 `git push --tags`、`git push --follow-tags` 都不会产生构建和部署。
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
 
-   需要为某个 tag 或任意提交部署时，用 **workflow_dispatch**（Actions 页面
-   「Run workflow」）手动触发。
+   工作机制：`.github/workflows/deploy.yml` 的触发条件里**故意不写 `branches`**，
+   只写 `tags: ['v*']`。GitHub Actions 的分支过滤与标签过滤是**互相独立**的，
+   分支引用不可能匹配标签模式，所以普通 push 一定不会构建，只有 `v` 开头的
+   tag 才会。
+
+   需要从分支直接部署、或临时重新部署某个提交时，用 **workflow_dispatch**
+   （Actions 页面 → 「Run workflow」）手动触发，不需要打 tag。
+
+   两点容易踩的细节：
+
+   - **tag 必须是 `v` 开头**（`tags: ['v*']`）：`v1.0.0`、`v2`、`v1.2.3-beta` 都会
+     构建；`release-1`、`1.0.0` 不会。想放宽就改 `tags` 里的模式。
+   - **`git push --follow-tags` 会部署**：它同时推分支和 tag，触发的是 tag 那一侧，
+     不是分支。不想要部署就别带 `--follow-tags` / `--tags`。
+
+   触发规则本身有自动化校验（`npm run verify:workflows`）：它解析真实的工作流
+   YAML，按 GitHub 的 push 过滤规则断言「分支 push 不触发、版本 tag 触发」，
+   以后有人误加 `branches:` 或删掉 `tags:` 会直接测试失败。
 
 3. **在仓库设置里开启 Pages**：Settings → Pages → Source 选择 **GitHub Actions**。
 

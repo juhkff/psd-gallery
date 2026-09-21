@@ -15,12 +15,15 @@
 name: LFS and file-size guard
 
 on:
+  # Same DEPLOY-ON-TAG rule as the deploy workflow: pushing code to a branch
+  # does not run this. Early feedback is preserved where it matters - pull
+  # requests - because the point of this check is catching an oversized or
+  # un-LFS'd PSD BEFORE it reaches GitHub's server-side rejection.
+  #
+  # Note this is a *validation* and cannot block a direct `git push` from a
+  # local clone; what it does is fail the release (and any PR) loudly.
   push:
-    # Branch pushes only: tag and branch filters are independent, so this
-    # workflow is not triggered by pushing a tag. `tags-ignore` makes that
-    # explicit and keeps it true if a `tags:` filter is ever added.
-    branches: [main]
-    tags-ignore: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
