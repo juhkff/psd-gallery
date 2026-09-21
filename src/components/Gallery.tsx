@@ -3,13 +3,24 @@
  *
  * Tiles are plain `<a href="#/date/name">` links, so opening a work is a normal
  * navigation and the browser back button just works.
+ *
+ * SCALING: every tile is a DOM node and a daily-practice library grows without
+ * bound. Measured on this machine (scripts/bench-scale.ts): ~10.6 DOM nodes per
+ * work, and at 500 works the page would be ~320,000 px tall - a scrollbar that
+ * long stops being navigable well before the browser struggles. So the list is
+ * paginated by date group: the first page paints immediately and older dates are
+ * revealed on demand. Thumbnails stay `loading="lazy"`, which is why a gallery of
+ * hundreds of works still issues only a handful of image requests.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DateGroup, WorkEntry } from '../../shared/manifest';
 import { formatDateLabel } from '../../shared/paths';
 import { formatBytes, formatSize } from '../lib/format';
+import { GROUPS_PER_PAGE, planGalleryPage } from '../lib/gallery-page';
 import { workHash } from '../lib/route';
+
+export { GROUPS_PER_PAGE };
 
 interface WorkTileProps {
   date: string;
@@ -80,12 +91,24 @@ export interface GalleryProps {
 }
 
 export function Gallery({ groups, selected = null }: GalleryProps) {
+  const [visibleGroups, setVisibleGroups] = useState(GROUPS_PER_PAGE);
+
+  // Newest first; a deep link into an older date widens the page so the
+  // selected tile is never paginated away. See lib/gallery-page.ts.
+  const page = useMemo(
+    () => planGalleryPage(groups, visibleGroups, selected),
+    [groups, visibleGroups, selected],
+  );
+
   if (groups.length === 0) {
     return <p className="text-sm text-studio-300">暂时没有可展示的作品。</p>;
   }
+
+  const { shown, hiddenCount, hiddenWorks, totalGroups, totalWorks, hasMore } = page;
+
   return (
     <div className="flex flex-col gap-10">
-      {groups.map((group) => (
+      {shown.map((group) => (
         <section key={group.date} className="flex flex-col gap-4">
           <div className="flex items-baseline gap-3 border-b border-studio-700 pb-2">
             <h2 data-date={group.date} className="text-lg font-semibold tracking-wide">
@@ -106,6 +129,22 @@ export function Gallery({ groups, selected = null }: GalleryProps) {
           </ul>
         </section>
       ))}
+
+      {hasMore && (
+        <div className="flex flex-col items-center gap-2 border-t border-studio-700 pt-6">
+          <button
+            type="button"
+            data-testid="load-more"
+            onClick={() => setVisibleGroups((current) => current + GROUPS_PER_PAGE)}
+            className="rounded-lg border border-studio-600 px-5 py-2 text-sm text-studio-100 transition hover:border-accent/70 hover:bg-studio-800"
+          >
+            显示更早的日期（还有 {hiddenCount} 天 · {hiddenWorks} 件）
+          </button>
+          <p className="text-xs text-studio-300">
+            已显示 {shown.length} / {totalGroups} 天，共 {totalWorks} 件作品
+          </p>
+        </div>
+      )}
     </div>
   );
 }

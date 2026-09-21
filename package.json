@@ -17,7 +17,9 @@
     "typecheck": "tsc -b --pretty false",
     "test:unit": "vitest run",
     "test:e2e": "tsx scripts/e2e-verify.ts",
-    "verify:proxy": "tsx scripts/verify-proxy.ts"
+    "verify:proxy": "tsx scripts/verify-proxy.ts",
+    "verify:scale": "tsx scripts/verify-scale-ui.ts",
+    "bench:scale": "tsx scripts/bench-scale.ts"
   },
   "dependencies": {
     "ag-psd": "31.0.2",

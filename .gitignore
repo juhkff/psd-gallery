@@ -20,3 +20,6 @@ __pycache__/
 .idea/
 .DS_Store
 *.log
+
+# Scaling benchmark scratch output (scripts/bench-scale.ts)
+public/generated-scale/

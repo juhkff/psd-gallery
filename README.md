@@ -59,6 +59,8 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
 | `npm run test:unit` | 单元测试（图层合成决策、代理缩放、混合模式回退、manifest/索引解析） |
 | `npm test:e2e` | 用真实 headless Chrome 跑端到端验收（需先 `npm run build`） |
 | `npm run verify:proxy` | 生成一张 8.3 MP 的临时 PSD，验证代理缩放路径后自动清理 |
+| `npm run verify:scale` | 用合成 manifest 验证「日期很多」时首屏仍然有界（分页生效） |
+| `npm run bench:scale` | 生成 N 个临时 PSD，实测构建耗时 / 产物体积 / DOM 规模随作品数增长 |
 | `npm run typecheck` | 全项目类型检查 |
 
 > **注意**：`public/generated/` 是构建产物，已在 `.gitignore` 中，不要提交。
@@ -112,6 +114,31 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
   `npx tsx scripts/build-index.ts --root <站点目录> --out <站点目录>/index-dates.json`。
   站点会在目录列表区域显示这些"已存在但尚未构建"的文件，因为它们没有缩略图
   和图层数据，只能下载。
+
+## 日期/作品变多了会怎样
+
+每天一张，一年就是 365 个日期。实测数据（`npm run bench:scale`，本机）：
+
+| 作品数 | 构建耗时 | manifest | 预览图产物 | DOM 节点 | 首屏渲染 | JS 堆 |
+|---|---|---|---|---|---|---|
+| 25 | 2.6 s | 75 KB | 16 MiB | 298 | 1.0 s | 2.8 MiB |
+| 50 | 3.6 s | 150 KB | 32 MiB | 573 | 1.0 s | 2.8 MiB |
+| 100 | 7.2 s | 299 KB | 65 MiB | 1123 | 1.0 s | 3.3 MiB |
+| 500（外推） | ~31 s | ~1.5 MB | **~324 MiB** | — | — | — |
+
+- **构建不是瓶颈**：约 62 ms/作品，线性增长，500 个作品约半分钟，CI 完全够用。
+- **浏览器也不吃力**：缩略图是 `loading="lazy"`，600 个作品时首屏只请求十几张图，
+  JS 堆稳定在几 MB。
+- **两个真正会先撑不住的地方**：
+  1. **预览图产物体积**。约 0.65 MiB/作品，500 个作品就是 ~324 MiB。先撞上 GitHub
+     "仓库建议 <1 GiB"和 LFS 流量配额。作品多到这个量级时，建议把
+     `scripts/build-manifest.ts` 里的 `THUMB_EDGE`/`DISPLAY_EDGE` 调小
+     （现在 480/1600），或只对最近的作品生成 `display` 预览图。
+  2. **页面长度**。每个作品约 10.6 个 DOM 节点，500 个作品的滚动条会有约 32 万像素高。
+- **画廊已分页**：首屏只渲染最新 30 个日期，底部有「显示更早的日期」按钮按需展开；
+  用 URL 直接打开某个较早的作品时，会自动展开到那个日期，不会出现"选中的作品被分页藏起来"。
+  实测 120 个作品（60 天）和 600 个作品（300 天）首屏都稳定在 **716 个 DOM 节点 /
+  约 11 800 px**，与总量无关（`npm run verify:scale`）。
 
 ## 技术栈
 

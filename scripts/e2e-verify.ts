@@ -166,6 +166,16 @@ async function main() {
     totals: { works: number; bytes: number };
     groups: { date: string; works: { name: string; psd: string; width: number; layers: unknown[] }[] }[];
   };
+  // A stale dist/ manifest (left behind by a scratch script, say) makes the site
+  // advertise works whose previews do not exist - catch that before driving the UI.
+  if (fs.existsSync(distManifest)) {
+    const served = JSON.parse(fs.readFileSync(distManifest, 'utf8')) as { totals?: { works?: number } };
+    check(
+      'dist manifest matches the freshly generated one (not stale)',
+      served.totals?.works === manifest.totals.works,
+      `dist=${served.totals?.works} works, public=${manifest.totals.works} works`,
+    );
+  }
   check(
     'manifest groups works by ISO date folder',
     manifest.groups.length >= 2 && manifest.groups.every((g) => /^\d{4}-\d{2}-\d{2}$/.test(g.date)),
