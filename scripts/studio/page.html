@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>图库管理端 · 上传 PSD</title>
+<style>
+  :root {
+    --bg: #08080b; --panel: #101017; --panel2: #17171f; --line: #24242e;
+    --ink: #ececf2; --dim: #b9b9c6; --faint: #6b6b7a;
+    --accent: #c9a227; --accent-soft: #e6c65c; --ember: #b45f3f;
+    --ok: #63b37a; --bad: #d9645f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh;
+    font: 14px/1.6 ui-sans-serif, system-ui, -apple-system, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background-image:
+      radial-gradient(50rem 30rem at 10% -10%, rgba(201,162,39,.12), transparent 70%),
+      radial-gradient(40rem 26rem at 90% 6%, rgba(120,96,200,.11), transparent 72%);
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: .02em; }
+  .sub { color: var(--faint); font-size: 12px; margin-bottom: 22px; }
+  .panel {
+    background: color-mix(in oklab, var(--panel) 78%, transparent);
+    border: 1px solid color-mix(in oklab, var(--ink) 9%, transparent);
+    border-radius: 16px; padding: 18px; backdrop-filter: blur(12px);
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1 1 auto; min-width: 0; }
+  label { font-size: 12px; color: var(--dim); display: block; margin-bottom: 4px; }
+  input[type=date] {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 10px; font: inherit; color-scheme: dark;
+  }
+  #drop {
+    margin-top: 14px; border: 1.5px dashed var(--line); border-radius: 14px;
+    padding: 30px 18px; text-align: center; transition: .18s; cursor: pointer;
+    background: linear-gradient(180deg, rgba(255,255,255,.015), transparent);
+  }
+  #drop.hot { border-color: var(--accent); background: rgba(201,162,39,.07); }
+  #drop strong { display: block; font-size: 15px; margin-bottom: 4px; }
+  #drop span { color: var(--faint); font-size: 12px; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 999px; padding: 9px 18px;
+    border: 1px solid var(--line); background: var(--panel2); color: var(--ink);
+    transition: .18s;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-soft); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary {
+    background: linear-gradient(100deg, var(--accent-soft), var(--accent) 55%, var(--ember));
+    border: none; color: #1a1405; font-weight: 600;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.06); color: #1a1405; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .14em; color: var(--faint); margin: 26px 0 10px; }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  li.item {
+    display: flex; gap: 12px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  }
+  li.item img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; background: #202028; flex: none; }
+  .ph { width: 54px; height: 54px; border-radius: 8px; background: #202028; flex: none;
+        display: grid; place-items: center; color: var(--faint); font-size: 10px; }
+  .meta { min-width: 0; flex: 1; }
+  .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail { font-size: 12px; color: var(--faint); }
+  .tag { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--dim); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  #log { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; color: var(--dim);
+         background: #0c0c10; border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 14px; max-height: 240px; overflow: auto; }
+  .hint { font-size: 12px; color: var(--faint); margin-top: 10px; }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+  .bar > i { display: block; height: 100%; width: 35%; background: linear-gradient(90deg, transparent, var(--accent), transparent);
+             animation: slide 1.2s linear infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(320%); } }
+  .hidden { display: none !important; }
+  .draft-head { display: flex; align-items: baseline; gap: 8px; margin: 16px 0 8px; }
+  .draft-head b { font-weight: 600; }
+  .draft-head span { color: var(--faint); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>图库管理端</h1>
+  <p class="sub">把 PSD 拖进来 → 自动生成预览与图层清单 → 点「发布」才会提交并推送到 GitHub。仅本机可用。</p>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label for="date">放到的日期文件夹</label>
+        <input type="date" id="date" />
+      </div>
+      <div class="grow"></div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="pick">选择 PSD 文件…</button>
+      </div>
+    </div>
+
+    <div id="drop">
+      <strong>把 .psd 文件拖到这里</strong>
+      <span>可以一次拖多个；文件名会自动改成 1.psd、2.psd… 按数字排序</span>
+    </div>
+    <input type="file" id="file" accept=".psd" multiple class="hidden" />
+    <div id="progress-bar" class="bar hidden"><i></i></div>
+    <div class="hint">单文件上限 100 MiB（GitHub 硬限制，走 LFS 也一样）。草稿在发布前不会提交。</div>
+  </div>
+
+  <h2>待发布草稿 <span id="draft-count" class="tag">0</span></h2>
+  <div id="drafts"></div>
+  <div class="row" style="margin-top:16px">
+    <button id="publish" class="primary" disabled>发布（提交并推送）</button>
+    <button id="refresh">刷新</button>
+  </div>
+  <div id="log" class="hidden"></div>
+
+  <h2>已归档作品 <span id="work-count" class="tag">0</span></h2>
+  <ul id="works"></ul>
+</div>
+
+<script>
+const TOKEN = '__STUDIO_TOKEN__';
+const $ = (id) => document.getElementById(id);
+const state = { gallery: null, busy: false };
+
+function bytes(n) {
+  if (!n) return '0 B';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KiB';
+  return (n / 1048576).toFixed(1) + ' MiB';
+}
+function log(text) {
+  const el = $('log');
+  el.classList.remove('hidden');
+  el.textContent = text;
+}
+function setBusy(busy, label) {
+  state.busy = busy;
+  $('publish').disabled = busy || !hasDrafts();
+  $('progress-bar').classList.toggle('hidden', !busy);
+  if (label) log(label);
+}
+function hasDrafts() {
+  return (state.gallery?.totals?.drafts ?? 0) > 0;
+}
+
+function renderDrafts() {
+  const host = $('drafts');
+  host.innerHTML = '';
+  const groups = state.gallery?.drafts ?? [];
+  $('draft-count').textContent = state.gallery?.totals?.drafts ?? 0;
+  if (groups.length === 0) {
+    host.innerHTML = '<p class="hint">还没有草稿。上传的 PSD 会先出现在这里，点发布后才进入图库。</p>';
+    return;
+  }
+  for (const group of groups) {
+    const head = document.createElement('div');
+    head.className = 'draft-head';
+    head.innerHTML = '<b>' + group.date + '</b><span>' + group.entries.length + ' 件待发布</span>';
+    host.appendChild(head);
+    const ul = document.createElement('ul');
+    for (const entry of group.entries) {
+      const li = document.createElement('li');
+      li.className = 'item';
+      const ph = document.createElement('div');
+      ph.className = 'ph';
+      ph.textContent = 'PSD';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = entry.stem + '.psd';
+      const detail = document.createElement('div');
+      detail.className = 'detail';
+      detail.textContent = bytes(entry.bytes) + ' · 发布后 → ' + entry.publishTo + '（序号按发布时确定）';
+      meta.append(name, detail);
+      li.append(ph, meta);
+      ul.appendChild(li);
+    }
+    host.appendChild(ul);
+  }
+}
+
+function renderWorks() {
+  const host = $('works');
+  host.innerHTML = '';
+  const groups = state.gallery?.manifest?.groups ?? [];
+  $('work-count').textContent = state.gallery?.manifest?.totalWorks ?? 0;
+  if (groups.length === 0) {
+    host.innerHTML = '<li class="item"><div class="meta"><div class="detail">还没有已归档作品</div></div></li>';
+    return;
+  }
+  for (const group of groups) {
+    const li = document.createElement('li');
+    li.className = 'item';
+    const thumb = group.works[0]?.thumb;
+    if (thumb) {
+      const img = document.createElement('img');
+      img.src = thumb;
+      img.alt = '';
+      li.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'ph';
+      ph.textContent = 'PSD';
+      li.appendChild(ph);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = group.date;
+    const detail = document.createElement('div');
+    detail.className = 'detail';
+    detail.textContent = group.works.map((w) => w.name + '.psd').join('、');
+    meta.append(name, detail);
+    li.appendChild(meta);
+    host.appendChild(li);
+  }
+}
+
+async function refresh() {
+  const response = await fetch('/api/status');
+  const data = await response.json();
+  state.gallery = data.gallery;
+  if (!$('date').value) $('date').value = data.today;
+  renderDrafts();
+  renderWorks();
+  $('publish').disabled = state.busy || !hasDrafts();
+  return data;
+}
+
+async function upload(files) {
+  if (!files || files.length === 0) return;
+  const form = new FormData();
+  form.append('date', $('date').value);
+  for (const file of files) form.append('files', file);
+  setBusy(true, '正在上传 ' + files.length + ' 个文件…');
+  try {
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'x-studio-token': TOKEN },
+      body: form,
+    });
+    const data = await response.json();
+    const lines = [];
+    for (const item of data.accepted ?? []) lines.push('✅ ' + item.original + ' → ' + item.path);
+    for (const item of data.rejected ?? []) lines.push('❌ ' + item.original + '：' + item.reason);
+    if (data.error) lines.push('❌ ' + data.error);
+    if (data.rebuilding) lines.push('⏳ 正在生成预览与图层清单…');
+    log(lines.join('\n'));
+    state.gallery = data.gallery;
+    renderDrafts();
+    renderWorks();
+    if (data.rebuilding) {
+      // the manifest rebuild runs in the background; poll until it settles
+      const started = Date.now();
+      while (Date.now() - started < 10 * 60 * 1000) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const status = await refresh();
+        if (!status.gallery.build.running && status.gallery.build.queued === 0) break;
+      }
+      log(lines.join('\n') + '\n✅ 预览已就绪，可以发布了');
+    }
+  } catch (error) {
+    log('❌ 上传失败：' + error.message);
+  } finally {
+    setBusy(false);
+    $('publish').disabled = state.busy || !hasDrafts();
+  }
+}
+
+async function publish() {
+  if (!confirm('发布这些草稿？会写入 works/、重新生成预览，并 commit + push 到 GitHub。')) return;
+  setBusy(true, '正在发布…');
+  try {
+    const response = await fetch('/api/publish', { method: 'POST', headers: { 'x-studio-token': TOKEN } });
+    const data = await response.json();
+    const lines = (data.steps ?? []).map((step) => (step.ok ? '✅ ' : '❌ ') + step.step + ' — ' + step.detail);
+    lines.push((data.ok ? '✅ ' : '❌ ') + data.message);
+    log(lines.join('\n'));
+    await refresh();
+  } catch (error) {
+    log('❌ 发布失败：' + error.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
+const drop = $('drop');
+const fileInput = $('file');
+$('pick').addEventListener('click', () => fileInput.click());
+drop.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { upload(fileInput.files); fileInput.value = ''; });
+for (const type of ['dragenter', 'dragover']) {
+  drop.addEventListener(type, (event) => { event.preventDefault(); drop.classList.add('hot'); });
+}
+for (const type of ['dragleave', 'drop']) {
+  drop.addEventListener(type, () => drop.classList.remove('hot'));
+}
+drop.addEventListener('drop', (event) => {
+  event.preventDefault();
+  const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => /\.psd$/i.test(f.name));
+  if (files.length === 0) { log('❌ 没有检测到 .psd 文件'); return; }
+  upload(files);
+});
+$('publish').addEventListener('click', publish);
+$('refresh').addEventListener('click', refresh);
+window.addEventListener('beforeunload', (event) => {
+  if (state.busy) { event.preventDefault(); event.returnValue = ''; }
+});
+refresh();
+setInterval(() => { if (!state.busy) refresh().catch(() => {}); }, 5000);
+</script>
+</body>
+</html>
