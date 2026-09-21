@@ -1,0 +1,8 @@
+# Normalize text files in the repo so CRLF/LF differences never show up as diffs.
+* text=auto eol=lf
+
+# PSD source files must go through Git LFS - GitHub rejects any single file >100 MiB.
+*.psd filter=lfs diff=lfs merge=lfs -text
+*.psb filter=lfs diff=lfs merge=lfs -text
+*.tif filter=lfs diff=lfs merge=lfs -text
+*.tiff filter=lfs diff=lfs merge=lfs -text

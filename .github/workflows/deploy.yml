@@ -1,0 +1,103 @@
+# Deploy the gallery to GitHub Pages.
+#
+# Two things this workflow has to get right:
+#
+#  1. Git LFS. Every `*.psd` is tracked through Git LFS (.gitattributes) and a
+#     single PSD can easily exceed GitHub's 100 MiB plain-Git limit. Checkout
+#     therefore runs with `lfs: true`; without it the workspace would hold
+#     130-byte LFS pointers and `npm run manifest` would try to parse those as
+#     Photoshop documents. The deploy job only ships `dist/`, so the previews
+#     and the copied PSDs are real files by the time Pages serves them.
+#
+#  2. BASE_PATH. A GitHub Pages *project* site is served from
+#     https://<owner>.github.io/<repo>/, so Vite's `base` and every URL written
+#     into public/generated/manifest.json must carry the "/<repo>/" prefix or
+#     every asset 404s. The value is derived below from the event's repository
+#     name and can be overridden with the repository variable BASE_PATH (use
+#     "/" for a user/apex site or a custom domain).
+#
+# One-time repository setup: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions".
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required by actions/deploy-pages: write the Pages site + mint the OIDC token.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two Pages deployments race (the contract requires one "pages" group).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Smudge LFS objects into the working tree - see the LFS note above.
+          lfs: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve BASE_PATH
+        id: base
+        env:
+          BASE_PATH_OVERRIDE: ${{ vars.BASE_PATH }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          # Repository variable wins; otherwise "/<repo>/" for a project site.
+          base="${BASE_PATH_OVERRIDE:-/${REPO_NAME:-${GITHUB_REPOSITORY##*/}}/}"
+          case "$base" in /*) ;; *) base="/$base" ;; esac
+          case "$base" in */) ;; *) base="$base/" ;; esac
+          echo "BASE_PATH=$base"
+          echo "value=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Build manifest and previews
+        run: npm run manifest
+        env:
+          # Root-absolute URLs in the manifest must match the deployed prefix.
+          BASE_PATH: ${{ steps.base.outputs.value }}
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Build site
+        # `npm run build` re-runs the (idempotent) manifest step, then
+        # `tsc -b && vite build`; dist/ ends up with the generated assets.
+        run: npm run build
+        env:
+          BASE_PATH: ${{ steps.base.outputs.value }}
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

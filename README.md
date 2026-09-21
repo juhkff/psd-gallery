@@ -1,0 +1,122 @@
+# 绘画练习图库 · Drawing Practice Gallery
+
+把日常绘画练习的成品图和 PSD 工程文件放进 `works/日期/` 目录，推送到 GitHub，
+自动部署成一个在线图库：**按日期分组浏览、在网页里把 PSD 当 PNG 查看、点图层名
+隐藏/显示单个图层、下载原始 PSD**。
+
+## 它是怎么工作的
+
+`works/` 下每个 PSD 在**构建时**被处理一次：生成 480px 缩略图、1600px 预览图、
+图层树元数据，并写入 `public/generated/manifest.json`；源 PSD 同时复制进产物，
+供下载。浏览器端则是**纯静态**的，只在你要看某个作品的图层时才去解析那个 PSD。
+
+为什么这么设计，本机实测数据说了算（Chromium 152 headless，详见 `DECISIONS.md`）：
+
+| 操作 | 实测耗时 |
+|---|---|
+| 只读目录结构 / 图层名 | 0.1–2.8 ms（几乎免费） |
+| 完整解码（合成图 + 全部图层） | **4–7 MP/s**：1.9 MP → 318 ms；8.7 MP → 1.3–2.0 s |
+| 合成图编码成 PNG | 0.4–0.5 s（A4 @300dpi） |
+| 已解码图层重绘到 1500px 画布 | 数十 ms |
+
+结论直接决定了三条产品约束：
+
+1. **列表页绝不解析 PSD** —— 用构建时缩略图，所以秒开；
+2. **解码只在 Web Worker 里** —— 解码是同步的且只有 4–7 MP/s，放主线程必卡死；
+3. **切图层只重绘、不重新解码** —— 每层位图解码一次后缓存，点眼睛图标只重绘。
+
+## 目录约定
+
+```
+works/
+├── 2026-09-21/
+│   ├── 1.psd          ← 文件名按数字排序
+│   └── 2.psd
+└── 2026-09-24/
+    └── 1.psd
+```
+
+- 文件夹名必须是 `YYYY-MM-DD`（其他名字会被忽略并给出提示）；
+- 文件名建议用数字，站点按数字大小排序（`2.psd` 排在 `10.psd` 前面）；
+- 支持任意层级：日期目录下的 `*.psd` 都会被收录。
+
+## 本地使用
+
+```bash
+npm install
+npm run samples     # 可选：生成 3 个示例 PSD，先看效果
+npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:5173
+```
+
+常用命令：
+
+| 命令 | 作用 |
+|---|---|
+| `npm run manifest` | 只重新扫描 `works/` 并生成产物（加了新图后先跑它） |
+| `npm run dev` | 生成 manifest + 启动开发服务器 |
+| `npm run build` | 生成 manifest + 类型检查 + 构建到 `dist/` |
+| `npm run preview` | 本地预览构建产物 |
+| `npm run test:unit` | 单元测试（图层合成决策、代理缩放、混合模式回退、manifest/索引解析） |
+| `npm test:e2e` | 用真实 headless Chrome 跑端到端验收（需先 `npm run build`） |
+| `npm run verify:proxy` | 生成一张 8.3 MP 的临时 PSD，验证代理缩放路径后自动清理 |
+| `npm run typecheck` | 全项目类型检查 |
+
+> **注意**：`public/generated/` 是构建产物，已在 `.gitignore` 中，不要提交。
+
+## 部署到 GitHub Pages
+
+1. **安装 Git LFS（必须）**。GitHub 拒绝任何超过 100 MiB 的单个文件，
+   带图层的 PSD 很容易超；仓库里的 `.gitattributes` 已把 `*.psd` 指向 LFS：
+
+   ```bash
+   git lfs install
+   git add .gitattributes
+   git add works/2026-09-21/1.psd     # 会走 LFS，而不是普通对象
+   git commit -m "add works"
+   git push
+   ```
+
+2. **推送代码**。`.github/workflows/deploy.yml` 会在 push 到 `main` 时自动：
+   检出（含 LFS）→ `npm ci` → `npm run manifest` → 单元测试 → `npm run build`
+   → 发布到 GitHub Pages。
+
+3. **在仓库设置里开启 Pages**：Settings → Pages → Source 选择 **GitHub Actions**。
+
+4. **访问地址**：`https://<用户名>.github.io/<仓库名>/`。
+   工作流会自动把 `BASE_PATH` 设成 `/<仓库名>/`，这是子路径部署能正确加载
+   资源的关键；如果你用的是 `<用户名>.github.io` 这种根域名仓库，
+   把仓库变量 `BASE_PATH` 设为 `/` 即可。本地想验证子路径部署：
+
+   ```bash
+   BASE_PATH=/你的仓库名/ npm run build && npm run preview
+   ```
+
+## 新增作品的两种方式
+
+- **方式 A（推荐，随时可用）**：把 PSD 放进 `works/日期/` 并 push。
+  构建时会自动收录；缺点是刷新页面后新图才出现，且需要重新构建。
+- **方式 B（不重新构建）**：部署服务器上把新文件放进站点目录，然后运行
+  `npx tsx scripts/build-index.ts --root <站点目录> --out <站点目录>/index-dates.json`。
+  站点会在目录列表区域显示这些"已存在但尚未构建"的文件，因为它们没有缩略图
+  和图层数据，只能下载。
+
+## 技术栈
+
+Vite 8 · React 19 · TypeScript · Tailwind CSS 4 · [ag-psd](https://github.com/Agamnentzar/ag-psd)（读取 PSD）· @napi-rs/canvas（构建时渲染缩略图）· vitest · Puppeteer（端到端验收）
+
+## 已知限制
+
+- ag-psd **不会重绘**智能对象、矢量、文字、调整图层的效果——这些图层的像素是
+  Photoshop 里烘焙好的，UI 会对这类作品给出提示；
+- 超过 ~6 MP 的大图，图层查看器渲染的是**代理分辨率**，以保证交互流畅（图上会
+  标明），构建时预览图仍是全分辨率；
+- 浏览器无法复现的 PSD 混合模式（溶解、线性加深、亮光、实色混合、减去、划分等）
+  会退化为近似效果，UI 会标注；
+- 首次打开某作品的图层视图需要等待解码（1080×1350 约 0.25 s，A4@300dpi 约 1.3–2 s），
+  期间先显示构建时预览图，界面不会卡住；同一作品第二次打开走 IndexedDB 缓存，几乎瞬时。
+- **打开作品时会把所有可绘制图层（含 PSD 里默认隐藏的图层）解码一遍**，这样之后每次
+  点眼睛图标都是纯重绘、不再等待。代价是图层很多的超大文件首次打开较久（例如
+  18 层 / 8.7 MP 可能需要十几秒，期间有进度提示且界面可交互）。如果想改为
+  "先解码可见图层、隐藏图层后台慢慢补"，这是一个小改动。
+
+设计与实测依据见 [`DECISIONS.md`](./DECISIONS.md)。

@@ -1,0 +1,132 @@
+# Guard against the two ways a media file can break a GitHub push:
+#
+#   * a plain Git blob larger than 100 MiB - GitHub rejects the push outright;
+#   * a PSD (or other .gitattributes LFS type) committed without Git LFS, which
+#     turns into exactly that oversized blob the moment the file grows.
+#
+# The comparison uses the *Git blob* size (`git cat-file -s :path`), not the
+# working-tree size: for an LFS-tracked file the blob that would be pushed is
+# the ~130-byte pointer, which is precisely why LFS solves the 100 MiB limit.
+# A non-LFS file falls back to its working-tree size.
+#
+# Runs on every push to main and on pull requests so the problem is caught
+# before it reaches GitHub's server-side rejection.
+
+name: LFS and file-size guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lfs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Real bytes are needed to measure the files; pointers are detected
+          # separately, so a missing LFS smudge is reported rather than hidden.
+          lfs: true
+
+      - name: Check PSD sizes and LFS tracking
+        run: |
+          set -uo pipefail
+
+          LIMIT_BYTES=$((100 * 1024 * 1024))
+          LIMIT_LABEL="100 MiB"
+
+          # `.psd/.psb/.tif/.tiff` must be in LFS (.gitattributes); `.ai` is only
+          # size-checked because the repo does not declare it as an LFS type.
+          LFS_REQUIRED_EXTS='.psd .psb .tif .tiff'
+
+          if ! git rev-parse --git-dir >/dev/null 2>&1; then
+            echo "::error::not inside a git repository - cannot verify LFS tracking"
+            exit 1
+          fi
+          git lfs version || echo "warning: git-lfs is not installed on this runner"
+
+          mapfile -t files < <(
+            git ls-files --cached --others --exclude-standard -- \
+              '*.psd' '*.psb' '*.tif' '*.tiff' '*.ai' | sort
+          )
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No PSD/PSB/TIFF/AI files found - nothing to check."
+            exit 0
+          fi
+
+          printf '%-46s %12s %12s %8s  %s\n' "file" "worktree" "git blob" "filter" "note"
+          failures=0
+          fail() {
+            printf '  FAIL  %s: %s\n' "$1" "$2"
+            failures=$((failures + 1))
+          }
+
+          for file in "${files[@]}"; do
+            [ -f "$file" ] || continue
+            worktree_size=$(stat -c %s "$file")
+            filter=$(git check-attr filter -- "$file" | sed 's/^[^:]*: [^:]*: //')
+            note=""
+
+            if head -c 64 "$file" | grep -q 'git-lfs.github.com/spec'; then
+              # Working tree still holds the pointer (LFS object not smudged).
+              note="LFS pointer"
+              blob_size=0
+            else
+              blob_size=$(git cat-file -s ":$file" 2>/dev/null || true)
+              if [ -z "$blob_size" ]; then
+                # Untracked: with the LFS filter `git add` stores a pointer,
+                # otherwise the raw file becomes the blob.
+                if [ "$filter" = "lfs" ]; then
+                  blob_size=0
+                  note="LFS (pending add)"
+                else
+                  blob_size=$worktree_size
+                  note="untracked"
+                fi
+              fi
+            fi
+
+            if [ "$blob_size" -gt "$LIMIT_BYTES" ]; then
+              fail "$file" "git blob would be $((blob_size / 1024 / 1024)) MiB, over GitHub's ${LIMIT_LABEL} hard limit"
+            fi
+
+            for ext in $LFS_REQUIRED_EXTS; do
+              case "$file" in
+                *"$ext")
+                  if [ "$filter" != "lfs" ]; then
+                    fail "$file" "extension $ext must be tracked by Git LFS (filter=$filter) - run 'git lfs track \"*${ext}\"' and commit .gitattributes"
+                  fi
+                  ;;
+              esac
+            done
+
+            printf '%-46s %12s %12s %8s  %s\n' \
+              "$file" "$worktree_size" "$blob_size" "${filter:-unspecified}" "$note"
+          done
+
+          if [ "$failures" -gt 0 ]; then
+            echo ""
+            echo "::error::$failures large-file/LFS problem(s) found - this push would be rejected by GitHub."
+            echo ""
+            echo "How to fix:"
+            echo "  1. git lfs install"
+            echo "  2. git lfs track \"*.psd\" \"*.psb\" \"*.tif\" \"*.tiff\"   # keeps .gitattributes in sync"
+            echo "  3. git add .gitattributes <your file> && git commit"
+            echo "  4. If an oversized file is ALREADY in history, tracking alone is not enough:"
+            echo "     rewrite it with 'git lfs migrate import --include=\"*.psd\" --everything'"
+            echo "     (coordinate with the team first - this rewrites commit ids)."
+            echo ""
+            echo "Note: GitHub rejects plain Git blobs over 100 MiB; up to 2 GiB per file is"
+            echo "allowed when the bytes live in Git LFS."
+            echo "See https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-git-large-file-storage"
+            exit 1
+          fi
+
+          echo ""
+          echo "OK: ${#files[@]} media file(s) checked, none over ${LIMIT_LABEL}, all LFS types tracked."

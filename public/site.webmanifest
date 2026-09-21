@@ -1,0 +1,9 @@
+{
+  "name": "绘画练习图库 / Drawing Practice Gallery",
+  "short_name": "图库",
+  "description": "日常绘画练习作品与 PSD 工程文件归档，支持在线查看图层",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0b0f",
+  "theme_color": "#0b0b0f"
+}
