@@ -23,7 +23,14 @@ name: Deploy to GitHub Pages
 
 on:
   push:
+    # Only branch pushes build and deploy. Tag and branch filters are
+    # independent in GitHub Actions: a workflow that lists only `branches`
+    # is never triggered by a tag push, and listing `tags` here would turn
+    # tag pushes back on. So pushing a tag such as `v1.0.0` - or a tag plus
+    # its branch - must stay inert, which `tags-ignore: ['**']` states out
+    # loud and protects against someone later adding a `tags:` filter.
     branches: [main]
+    tags-ignore: ['**']
   workflow_dispatch:
 
 # Required by actions/deploy-pages: write the Pages site + mint the OIDC token.

@@ -16,7 +16,11 @@ name: LFS and file-size guard
 
 on:
   push:
+    # Branch pushes only: tag and branch filters are independent, so this
+    # workflow is not triggered by pushing a tag. `tags-ignore` makes that
+    # explicit and keeps it true if a `tags:` filter is ever added.
     branches: [main]
+    tags-ignore: ['**']
   pull_request:
   workflow_dispatch:
 

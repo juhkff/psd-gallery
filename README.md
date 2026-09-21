@@ -101,6 +101,15 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
    检出（含 LFS）→ `npm ci` → `npm run manifest` → 单元测试 → `npm run build`
    → 发布到 GitHub Pages。
 
+   **推送 tag 不会触发构建**。触发条件只写了 `branches: [main]`，并额外写了
+   `tags-ignore: ['**']`：GitHub Actions 的分支过滤和标签过滤是**互相独立**的，
+   只写 `branches` 的工作流本来就不会被 tag 触发，显式写 `tags-ignore` 是为了
+   把这条规则写死——将来有人误加 `tags:` 时不会悄悄把 tag 构建打开。
+   所以 `git push --tags`、`git push --follow-tags` 都不会产生构建和部署。
+
+   需要为某个 tag 或任意提交部署时，用 **workflow_dispatch**（Actions 页面
+   「Run workflow」）手动触发。
+
 3. **在仓库设置里开启 Pages**：Settings → Pages → Source 选择 **GitHub Actions**。
 
 4. **访问地址**：`https://<用户名>.github.io/<仓库名>/`。
