@@ -28,7 +28,13 @@ export function useScrollReveal(options: ScrollRevealOptions = {}): void {
 
     // Anything already on screen at mount reveals immediately; nodes added
     // later (pagination, route changes) are picked up by the MutationObserver.
-    const reveal = (node: Element) => node.classList.add(VISIBLE_CLASS);
+    const reveal = (node: Element) => {
+      node.classList.add(VISIBLE_CLASS);
+      // Drop the promotion hint once the animation is done. Leaving
+      // `will-change: transform` on an element keeps a containing block alive
+      // and permanently affects how descendants are positioned and scrolled.
+      (node as HTMLElement).style.willChange = 'auto';
+    };
 
     if (typeof IntersectionObserver === 'undefined') {
       // No observer support: leave everything visible.

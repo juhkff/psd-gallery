@@ -1,117 +1,66 @@
 @import 'tailwindcss';
 
 /*
+ * NOTE: do NOT add `-webkit-backdrop-filter` here. lightningcss rewrites an
+ * `@supports not (backdrop-filter: ...)` condition into
+ * `@supports not ((-webkit-backdrop-filter: ...) or (backdrop-filter: ...))`,
+ * and Chromium reports `CSS.supports('-webkit-backdrop-filter', ...)` as FALSE -
+ * so the negated condition became true, the opaque fallback below won, and the
+ * blur silently disappeared. `scripts/ui-check.ts` catches it.
+ *
  * Tailwind 4 is CSS-first: design tokens live here, not in a JS config.
  *
- * The visual language is LIQUID GLASS: translucent surfaces that refract a
- * blurred backdrop, a bright beveled rim, a specular highlight that tracks the
- * pointer, and a slow sheen that moves like a liquid film. Two rules keep it
- * from turning into mush:
+ * DESIGN DIRECTION: plain and quiet (简洁朴素).
  *
- *   1. The ARTWORK is the brightest thing on screen. Glass is chrome around it.
- *   2. Every translucent surface must keep body text readable against the
- *      darkest and lightest backdrop it can sit on, so the tint leans dark and
- *      the lightening comes from the rim instead.
+ * The previous iteration was liquid glass - refraction, chromatic fringes, an
+ * animated sheen, gradient text, floating cards. It was decorative, and it read
+ * as decoration. This one subtracts almost all of it:
+ *
+ *   - surfaces are a hairline border over a barely lifted background, with a
+ *     light blur so they sit on the page rather than on top of it;
+ *   - no glow, no gradient text, no sheen, no floating, no colour fringing;
+ *   - one accent colour used sparingly, everything else neutral;
+ *   - spacing does the work the effects used to do.
+ *
+ * The artwork is the only saturated thing on screen.
  */
 @theme {
-  --color-studio-950: #06060a;
-  --color-studio-900: #0d0d14;
-  --color-studio-850: #12121a;
-  --color-studio-800: #17171f;
-  --color-studio-700: #23232e;
-  --color-studio-600: #353542;
-  --color-studio-400: #6b6b7a;
-  --color-studio-300: #b9b9c6;
-  --color-studio-200: #d6d6e0;
-  --color-studio-100: #ececf2;
+  /* Neutrals, faintly warm so the page does not feel clinical. */
+  --color-ink-950: #0b0b0d;
+  --color-ink-900: #121215;
+  --color-ink-850: #17171b;
+  --color-ink-800: #1d1d22;
+  --color-ink-700: #2a2a31;
+  --color-ink-600: #3a3a43;
+  --color-ink-500: #55555f;
+  --color-ink-400: #74747f;
+  --color-ink-300: #9c9ca6;
+  --color-ink-200: #c4c4cc;
+  --color-ink-100: #e8e8ec;
 
-  --color-accent: #c9a227;
-  --color-accent-soft: #e6c65c;
-  --color-ember: #b45f3f;
-  /* Cool counterweight so the glass reads as glass, not as gold plastic. */
-  --color-ion: #7c6bd4;
-  --color-ice: #8fd0e8;
+  --color-accent: #b08a2e;
+  --color-accent-soft: #d8bd6a;
 
   --font-display:
     'Iowan Old Style', 'Palatino Linotype', 'Songti SC', 'Noto Serif SC',
     ui-serif, Georgia, serif;
 
-  --animate-fade-up: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-fade-in: fade-in 0.4s ease-out both;
-  --animate-raise: raise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-pulse-ring: pulse-ring 2.4s ease-out infinite;
-  --animate-shimmer: shimmer 1.8s linear infinite;
-  --animate-drift: drift 26s ease-in-out infinite alternate;
-  /* Liquid film: a slow, deliberately uneven sheen sweep. */
-  --animate-liquid: liquid-sweep 9s ease-in-out infinite;
-  /* A conic gradient spun around a button rim. */
-  --animate-rim: rim-spin 6s linear infinite;
-  --animate-float: liquid-float 7s ease-in-out infinite;
-  --animate-breathe: breathe 5.5s ease-in-out infinite;
+  /* Two animations, both quiet: content fades in, a live dot breathes. */
+  --animate-fade-in: fade-in 0.45s ease-out both;
+  --animate-pulse-soft: pulse-soft 2.6s ease-in-out infinite;
 
-  @keyframes fade-up {
-    from { opacity: 0; transform: translate3d(0, 14px, 0); }
-    to { opacity: 1; transform: none; }
-  }
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
   }
-  @keyframes raise {
-    from { opacity: 0; transform: translate3d(0, 26px, 0) scale(0.985); }
-    to { opacity: 1; transform: none; }
-  }
-  @keyframes pulse-ring {
-    0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 55%, transparent); }
-    70% { box-shadow: 0 0 0 10px transparent; }
-    100% { box-shadow: 0 0 0 0 transparent; }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
   }
   @keyframes shimmer {
     from { background-position: -160% 0; }
     to { background-position: 260% 0; }
   }
-  @keyframes drift {
-    from { transform: translate3d(-2%, -1%, 0) scale(1.05); }
-    to { transform: translate3d(2%, 1.5%, 0) scale(1.12); }
-  }
-  @keyframes liquid-sweep {
-    0%   { transform: translate3d(-120%, 0, 0) rotate(9deg) scale(1.5); opacity: 0; }
-    12%  { opacity: 0.55; }
-    50%  { transform: translate3d(10%, 0, 0) rotate(9deg) scale(1.5); opacity: 0.28; }
-    88%  { opacity: 0.5; }
-    100% { transform: translate3d(130%, 0, 0) rotate(9deg) scale(1.5); opacity: 0; }
-  }
-  /*
-   * The rim is animated by interpolating the CONIC GRADIENT ANGLE, not by
-   * rotating the pseudo-element box. `transform: rotate()` on the ::before
-   * rotates the box itself, so on any element wider than it is tall (a pill
-   * button) the masked ring swings outside the border box and paints a stray
-   * arc across the page. Registering the angle with @property makes it
-   * animatable; without @property support the ring is simply static.
-   */
-  @keyframes rim-spin {
-    from { --rim-angle: 0deg; }
-    to { --rim-angle: 360deg; }
-  }
-  @keyframes liquid-float {
-    0%, 100% { transform: translate3d(0, 0, 0); }
-    50% { transform: translate3d(0, -6px, 0); }
-  }
-  @keyframes breathe {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 0.9; }
-  }
-}
-
-/*
- * Registered custom property: without `@property` an angle in a gradient cannot
- * be interpolated, and the rim would sit static at its initial value. Browsers
- * without support simply never animate it - a graceful degrade.
- */
-@property --rim-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
 }
 
 @layer base {
@@ -121,14 +70,13 @@
   }
 
   body {
-    @apply bg-studio-950 text-studio-100 antialiased;
+    @apply bg-ink-950 text-ink-100 antialiased;
     margin: 0;
     font-family:
       ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Noto Sans SC',
       'PingFang SC', 'Microsoft YaHei', sans-serif;
-    /* `clip` rather than `hidden`: it still stops the animated sheen from
-       creating sideways scroll, but unlike overflow:hidden it does not make the
-       body a paint container, which would break every backdrop-filter. */
+    /* `clip` stops sideways scroll without making body a scroll container
+       (which would break every backdrop-filter on the page). */
     overflow-x: clip;
   }
 
@@ -137,450 +85,160 @@
   :focus-visible {
     outline: 2px solid var(--color-accent-soft);
     outline-offset: 2px;
-    border-radius: 6px;
+    border-radius: 4px;
   }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--color-studio-100) 14%, transparent);
-    border-radius: 6px;
-    border: 2px solid transparent;
+    background: var(--color-ink-700);
+    border-radius: 5px;
+    border: 3px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+    background: var(--color-ink-600);
     background-clip: content-box;
   }
   ::-webkit-scrollbar-track { background: transparent; }
 
   ::selection {
-    background: color-mix(in oklab, var(--color-accent) 38%, transparent);
-    color: var(--color-studio-100);
+    background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+    color: var(--color-ink-100);
   }
 }
 
 /* ------------------------------------------------------------------ *
- * liquid glass surfaces
+ * surfaces
  * ------------------------------------------------------------------ */
 
-/*
- * Base pane. Back to front:
- *   1. a lifted tint                       - glass is LIGHTER than the backdrop,
- *                                            which is what makes it read as a
- *                                            sheet rather than a hole
- *   2. a top-down light falloff             - the "thick glass" gradient
- *   3. inset rim (top light / bottom dark)  - the beveled edge
- *   4. a cool inner bloom                   - refraction fringe
- *   5. `backdrop-filter`                    - what is behind, blurred
- *
- * The tint is deliberately lifted: a near-black tint over a near-black backdrop
- * is invisible. Contrast for text is preserved because the lift is small (+3%
- * white) and the backdrop stays dark.
- */
-@utility liquid-glass {
-  position: relative;
-  isolation: isolate;
-  background-color: color-mix(in oklab, var(--color-studio-850) 52%, transparent);
-  background-image:
-    /* front-face light, angled like a real sheet */
-    linear-gradient(
-      168deg,
-      color-mix(in oklab, var(--color-studio-100) 13%, transparent),
-      color-mix(in oklab, var(--color-studio-100) 3%, transparent) 36%,
-      transparent 66%
-    ),
-    /* chromatic fringing: cool at the lit corner, warm at the shaded one.
-       This is what separates "glass" from "translucent grey box". */
-    radial-gradient(
-      120% 85% at 10% -16%,
-      color-mix(in oklab, var(--color-ice) 20%, transparent),
-      transparent 56%
-    ),
-    radial-gradient(
-      85% 70% at 94% 110%,
-      color-mix(in oklab, var(--color-ion) 18%, transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      70% 50% at 78% -10%,
-      color-mix(in oklab, var(--color-accent) 12%, transparent),
-      transparent 62%
-    );
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  backdrop-filter: blur(24px) saturate(190%);
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 42%, transparent),
-    inset 0 -1px 0 0 color-mix(in oklab, black 60%, transparent),
-    inset 0 0 70px -22px color-mix(in oklab, var(--color-ice) 55%, transparent),
-    0 26px 70px -24px rgb(0 0 0 / 0.9),
-    0 8px 22px -12px rgb(0 0 0 / 0.75);
-  border: 1px solid color-mix(in oklab, var(--color-studio-100) 20%, transparent);
-  border-radius: 22px;
+/** A normal panel: hairline border, barely lifted background, light blur. */
+@utility panel {
+  background-color: color-mix(in oklab, var(--color-ink-900) 72%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid color-mix(in oklab, var(--color-ink-100) 8%, transparent);
+  border-radius: 12px;
 }
 
-/* Lighter pane for dense UI (layer rows, toolbars) where the full effect is noisy. */
-@utility liquid-glass-thin {
-  position: relative;
-  isolation: isolate;
-  background-color: color-mix(in oklab, var(--color-studio-850) 50%, transparent);
-  background-image: linear-gradient(
-    172deg,
-    color-mix(in oklab, var(--color-studio-100) 8%, transparent),
-    transparent 52%
-  );
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  backdrop-filter: blur(14px) saturate(160%);
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 22%, transparent),
-    inset 0 -1px 0 0 color-mix(in oklab, black 40%, transparent),
-    0 12px 30px -16px rgb(0 0 0 / 0.75);
-  border: 1px solid color-mix(in oklab, var(--color-studio-100) 14%, transparent);
-  border-radius: 14px;
+/** Same idea for dense or repeated UI, where a panel would be too heavy. */
+@utility panel-quiet {
+  background-color: color-mix(in oklab, var(--color-ink-850) 62%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in oklab, var(--color-ink-100) 6%, transparent);
+  border-radius: 10px;
 }
 
-/* ------------------------------------------------------------------ *
- * depth + light
- * ------------------------------------------------------------------ */
-
-@utility liquid-elevate {
-  box-shadow:
-    0 24px 60px -22px rgb(0 0 0 / 0.85),
-    0 8px 24px -14px rgb(0 0 0 / 0.6),
-    inset 0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 20%, transparent);
+/** A recessed well for a picture: darker than the page, shadow falling inward. */
+@utility well {
+  background-color: color-mix(in oklab, var(--color-ink-950) 62%, transparent);
+  box-shadow: inset 0 1px 10px -4px rgb(0 0 0 / 0.7);
+  border-radius: 8px;
 }
 
-/*
- * Animated sheen. A dedicated child layer so it can only paint inside the pane,
- * clipped by border-radius rather than overflow:hidden (which would create a
- * paint container and break the backdrop blur on the element itself).
- */
-@utility liquid-sheen {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  border-radius: inherit;
-  overflow: hidden;
-  mix-blend-mode: screen;
-  opacity: 0.9;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: -60%;
-    left: -40%;
-    width: 58%;
-    height: 220%;
-    background: linear-gradient(
-      100deg,
-      transparent,
-      color-mix(in oklab, var(--color-studio-100) 16%, transparent) 40%,
-      color-mix(in oklab, var(--color-ice) 22%, transparent) 54%,
-      transparent
-    );
-    filter: blur(7px);
-    animation: var(--animate-liquid);
-  }
-}
-
-/* Pointer-tracked highlight; --mx/--my are set by src/lib/useLiquidPointer.ts. */
-@utility liquid-specular {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  border-radius: inherit;
-  opacity: 0;
-  transition: opacity 0.35s ease;
-  background: radial-gradient(
-    220px circle at var(--mx, 50%) var(--my, 0%),
-    color-mix(in oklab, var(--color-studio-100) 16%, transparent),
-    color-mix(in oklab, var(--color-ice) 6%, transparent) 40%,
-    transparent 70%
-  );
-}
-
-.liquid-interactive:hover > .liquid-specular,
-.liquid-interactive:focus-visible > .liquid-specular {
-  opacity: 1;
-}
-
-/* Thin travelling highlight on the rim - reserve for primary calls to action. */
-@utility liquid-rim {
-  position: relative;
-  isolation: isolate;
-  --rim-angle: 0deg;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: conic-gradient(
-      from var(--rim-angle),
-      transparent 0deg,
-      color-mix(in oklab, var(--color-studio-100) 92%, transparent) 58deg,
-      color-mix(in oklab, var(--color-ice) 85%, transparent) 112deg,
-      transparent 190deg,
-      transparent 360deg
-    );
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    animation: var(--animate-rim);
-    pointer-events: none;
-  }
-}
-
-@utility liquid-cta {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-accent-soft),
-    var(--color-accent) 48%,
-    var(--color-ember)
-  );
-  color: #17120a;
-  border: none;
-  box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.45),
-    inset 0 -2px 6px -2px rgb(120 60 20 / 0.55),
-    0 12px 30px -12px color-mix(in oklab, var(--color-accent) 70%, transparent);
-}
-
-/* ------------------------------------------------------------------ *
- * backdrop + texture
- * ------------------------------------------------------------------ */
-
-/*
- * Ambient light. Liquid glass only reads as glass when there is actual light
- * behind it to pick up - on a flat near-black page every pane looks like a dark
- * rectangle no matter how good the rim is. So the backdrop is deliberately
- * colourful and bright, and the panes stay dark on top of it: that contrast IS
- * the effect.
- */
-@utility studio-backdrop {
-  /*
-   * Ambient light, stretched over the whole document (see App.tsx) rather than
-   * one viewport - a `fixed inset-0` layer only lights the first screen, which
-   * is why everything below the fold used to be flat black.
-   *
-   * Positions are LENGTHS, not percentages: the element spans the full document
-   * height, so `%` would place each pool at a fraction of the whole page - the
-   * top would be a dark band and the pools would drift as the library grows.
-   * `vw`/`vh` anchor them to the top of the content at any page height, and
-   * `background-attachment: fixed` keeps the light source steady while scrolling.
-   *
-   * Each `color-mix` takes exactly two colour stops; the pool strength lives in
-   * the percentage of the first stop.
-   */
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-  background-image:
-    radial-gradient(58rem 38rem at 6vw -14vh,
-      color-mix(in oklab, var(--color-accent) 40%, transparent),
-      transparent 66%),
-    radial-gradient(46rem 34rem at 94vw 6vh,
-      color-mix(in oklab, var(--color-ion) 46%, transparent),
-      transparent 68%),
-    radial-gradient(52rem 40rem at 46vw 120vh,
-      color-mix(in oklab, var(--color-ember) 38%, transparent),
-      transparent 70%),
-    radial-gradient(34rem 26rem at 76vw 78vh,
-      color-mix(in oklab, var(--color-ice) 26%, transparent),
-      transparent 68%),
-    radial-gradient(28rem 22rem at 20vw 52vh,
-      color-mix(in oklab, var(--color-ion) 24%, transparent),
-      transparent 70%);
-}
-
-/*
- * REFRACTION - why this is not an SVG displacement filter.
- *
- * The obvious implementation is `backdrop-filter: url(#liquid-displace) blur(6px)`,
- * with an feTurbulence/feDisplacementMap filter to make the backdrop bend. That
- * was implemented, measured, and removed: in this Chromium, `url()` inside
- * `backdrop-filter` does not resolve, and because a single invalid function
- * invalidates the WHOLE declaration, the computed value collapsed to `none` -
- * destroying the blur as well. `scripts/liquid-check.ts` caught it (blur=none)
- * after it had already shipped into a screenshot that merely looked "a bit flat".
- *
- * What actually reads as refraction here is layered instead:
- *   - a saturated, blurred backdrop (below),
- *   - chromatic fringes at the edges (`liquid-glass` inner bloom + Hero's edge arcs),
- *   - a moving specular film (`liquid-sheen`),
- *   - a highlight that follows the pointer (`liquid-specular`).
- *
- * `LiquidFilters.tsx` is kept because `#liquid-goo` is still used, but nothing
- * depends on the displacement filter. Do not reintroduce `url()` into a
- * backdrop-filter chain without re-running the check.
- */
-@utility liquid-refract {
-  /* A slightly softer, more saturated pane - the "thick glass" variant. */
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  backdrop-filter: blur(30px) saturate(200%);
-}
-
-@utility grain-overlay { background-image: var(--grain-url); }
-
-/*
- * The mat an artwork sits in.
- *
- * A glass frame around a picture only reads as glass if the picture is clearly
- * *behind* it, so the mat is recessed - but an almost-black mat is the wrong
- * answer: over a large stage it becomes a black void with a print floating in
- * it, which is what the first version looked like (measured RGB 7-13 across
- * most of the mat). Instead the mat keeps a light tint and gets its depth from
- * graded insets: the shadow falls inward from the frame, strongest at the
- * corners, and a cool pool at the top keeps it feeling lit rather than dead.
- */
-@utility artwork-mat {
-  background-color: color-mix(in oklab, var(--color-studio-900) 58%, transparent);
-  background-image:
-    linear-gradient(
-      165deg,
-      color-mix(in oklab, var(--color-studio-100) 5%, transparent),
-      transparent 46%
-    ),
-    radial-gradient(
-      120% 80% at 50% -18%,
-      color-mix(in oklab, var(--color-ice) 10%, transparent),
-      transparent 62%
-    );
-  box-shadow:
-    inset 0 3px 16px -6px rgb(0 0 0 / 0.8),
-    inset 0 -1px 0 0 color-mix(in oklab, var(--color-studio-100) 8%, transparent),
-    inset 0 0 0 1px color-mix(in oklab, var(--color-studio-100) 6%, transparent),
-    0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 12%, transparent);
-}
-
-@utility glass-divider {
+/** Hairline separator. */
+@utility rule {
   height: 1px;
-  background-image: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in oklab, var(--color-studio-100) 22%, transparent) 12%,
-    color-mix(in oklab, var(--color-ice) 26%, transparent) 34%,
-    color-mix(in oklab, var(--color-studio-100) 8%, transparent) 62%,
-    transparent
-  );
+  background-color: color-mix(in oklab, var(--color-ink-100) 9%, transparent);
 }
 
-/* A soft pool of light behind a card that lifts on hover. */
-@utility hover-glow {
-  transition: box-shadow 0.4s ease, translate 0.4s ease;
+/** The single accent treatment: solid, sober, no gradient or glow. */
+@utility btn-accent {
+  background-color: var(--color-accent);
+  color: #14100a;
+  border: 1px solid color-mix(in oklab, var(--color-accent-soft) 45%, transparent);
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+@utility btn-quiet {
+  background-color: transparent;
+  color: var(--color-ink-200);
+  border: 1px solid color-mix(in oklab, var(--color-ink-100) 12%, transparent);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 @utility checkerboard {
-  /* Standard transparency indicator so PSD alpha is readable. */
+  /* Transparency grid so PSD alpha is readable. Deliberately low contrast: it
+     is a reference, not a decoration. */
   background-image:
-    linear-gradient(45deg, #2a2a33 25%, transparent 25%),
-    linear-gradient(-45deg, #2a2a33 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #2a2a33 75%),
-    linear-gradient(-45deg, transparent 75%, #2a2a33 75%);
+    linear-gradient(45deg, #1e1e23 25%, transparent 25%),
+    linear-gradient(-45deg, #1e1e23 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1e1e23 75%),
+    linear-gradient(-45deg, transparent 75%, #1e1e23 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  background-color: #1c1c24;
+  background-color: #16161a;
 }
 
 /* ------------------------------------------------------------------ *
  * text
  * ------------------------------------------------------------------ */
 
-@utility text-gradient-gold {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-accent-soft),
-    var(--color-accent) 45%,
-    var(--color-ember)
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+/** Small muted label. */
+@utility label {
+  font-size: 11px;
+  color: var(--color-ink-400);
 }
 
-@utility text-gradient-ice {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-studio-100),
-    var(--color-ice) 55%,
-    var(--color-ion)
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+/** Numeric readout. */
+@utility readout {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-100);
 }
 
 /* ------------------------------------------------------------------ *
- * scroll reveal + misc
+ * reveal - one short fade, no movement
  * ------------------------------------------------------------------ */
 
-@layer utilities {
-  .reveal { opacity: 1; }
+@utility reveal {
+  opacity: 1;
+}
 
+@layer utilities {
   .reveal-ready .reveal {
     opacity: 0;
-    transform: translate3d(0, 18px, 0);
-    transition:
-      opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 0.5s ease-out;
     transition-delay: var(--reveal-delay, 0ms);
-    will-change: opacity, transform;
   }
 
-  .reveal-ready .reveal.is-visible { opacity: 1; transform: none; }
+  .reveal-ready .reveal.is-visible { opacity: 1; }
 
   .shimmer-line {
     background-image: linear-gradient(
       100deg,
       transparent 20%,
-      color-mix(in oklab, var(--color-studio-100) 14%, transparent) 50%,
+      color-mix(in oklab, var(--color-ink-100) 10%, transparent) 50%,
       transparent 80%
     );
     background-size: 200% 100%;
-    animation: var(--animate-shimmer);
+    animation: shimmer 1.8s linear infinite;
   }
-
-  /* Elements using the pointer-tracked specular need a positioning context. */
-  .liquid-interactive { position: relative; isolation: isolate; }
 }
 
-/*
- * Fallback for browsers with no backdrop-filter: panes go fully opaque so the
- * text inside stays readable.
- *
- * Two traps were hit here and both are worth keeping in mind:
- *
- *  1. The condition must test the STANDARD property only. An earlier version
- *     also tested `-webkit-backdrop-filter`, which Chromium reports via
- *     `CSS.supports()` as FALSE - so `@supports not (... or -webkit-...)`
- *     evaluated true in Chrome and the fallback disabled the whole effect.
- *  2. Do not put a `@supports` rule inside `@layer base` here: lightningcss
- *     merges/hoists it while downleveling and the nesting became confusing to
- *     reason about. Top-level, after the layers, is unambiguous.
- *
- * `scripts/liquid-check.ts` asserts the computed backdrop-filter is a real blur,
- * which is what caught (1) - it was invisible in screenshots.
- */
-@supports not (backdrop-filter: blur(2px)) {
-  .liquid-glass,
-  .liquid-glass-thin {
-    background-color: var(--color-studio-900);
-  }
-  .liquid-refract {
-    backdrop-filter: none;
+@layer base {
+  /*
+   * Fallback: with no backdrop-filter the panels must stay readable, so the
+   * background goes opaque.
+   *
+   * It ONLY touches `background-color`. An earlier version also set
+   * `backdrop-filter: none` here, which meant that whenever this block matched
+   * it *removed the effect inside the very fallback meant to protect it*. Note
+   * that lightningcss rewrites the condition to include `-webkit-backdrop-filter`,
+   * which Chromium reports as unsupported - so this block DOES match in Chrome,
+   * and anything in here that is not a colour fallback will fire there.
+   */
+  @supports not (backdrop-filter: blur(2px)) {
+    .panel { background-color: var(--color-ink-900); }
+    .panel-quiet { background-color: var(--color-ink-850); }
   }
 }
 
 @media (prefers-contrast: more) {
-  .liquid-glass,
-  .liquid-glass-thin {
-    background-color: color-mix(in oklab, var(--color-studio-950) 92%, transparent);
-    border-color: color-mix(in oklab, var(--color-studio-100) 30%, transparent);
+  .panel,
+  .panel-quiet {
+    background-color: var(--color-ink-950);
+    border-color: color-mix(in oklab, var(--color-ink-100) 24%, transparent);
   }
-  .liquid-sheen,
-  .liquid-specular { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -588,13 +246,8 @@
 
   .reveal-ready .reveal {
     opacity: 1;
-    transform: none;
     transition: none;
   }
-
-  .liquid-sheen::before,
-  .liquid-rim::before { animation: none !important; }
-  .liquid-sheen { opacity: 0.3; }
 
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

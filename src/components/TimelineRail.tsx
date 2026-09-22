@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
+import { scrollToDateSection } from '../lib/scroll';
 import type { MonthBucket, StreakStats, TimelineEntry } from '../lib/timeline';
 import { relativeDayLabel, todayIso } from '../lib/timeline';
 
@@ -48,24 +49,27 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-/** Smooth-scroll to a rendered date section. No-op when it is not on the page. */
-function scrollToTimelineDate(date: string): void {
-  if (typeof document === 'undefined') return;
-  const element =
-    document.getElementById(`date-${date}`) ??
-    document.querySelector<HTMLElement>(`[data-timeline-date="${date}"]`);
-  if (!element) return;
-  element.scrollIntoView({
-    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-    block: 'start',
-  });
+/**
+ * Scroll to a date section.
+ *
+ * Deliberately NOT `scrollIntoView()`: each section starts inside a `.reveal`
+ * ancestor with `transform: translateY(18px)`, and a transformed ancestor is a
+ * containing block, which makes `scrollIntoView()` on a descendant a silent
+ * no-op. `src/lib/scroll.ts` scrolls the window to an absolute offset instead.
+ *
+ * `allowDefault` is used by the node links so their `href="#date-..."` still
+ * works with JS disabled: we only take over once we know the target exists.
+ */
+function scrollToTimelineDate(date: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return scrollToDateSection(date, { offset: 90 });
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="liquid-glass-thin px-2.5 py-2">
-      <dt className="text-[10px] tracking-wider text-studio-400">{label}</dt>
-      <dd className="mt-0.5 font-display text-base leading-none text-studio-100 tabular-nums">{value}</dd>
+    <div className="panel-quiet px-2.5 py-2">
+      <dt className="text-[10px] tracking-wider text-ink-400">{label}</dt>
+      <dd className="mt-0.5 font-display text-base leading-none text-ink-100 tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -79,6 +83,10 @@ export function TimelineRail({
 }: TimelineRailProps) {
   const navRef = useRef<HTMLElement | null>(null);
   const today = useMemo(() => todayIso(), []);
+
+  // Only these dates have a section in the DOM right now; the rest are paginated
+  // away, so a click must not silently do nothing for them.
+  const renderedDates = useMemo(() => entries.map((entry) => entry.date), [entries]);
 
   // The Lead may hand us only activeDate; deriving the month keeps the scrubber
   // honest even then.
@@ -115,11 +123,11 @@ export function TimelineRail({
       className="flex w-full flex-col gap-4 lg:w-60 lg:shrink-0"
     >
       {/* Sticky month scrubber: the "where am I in the calendar" control. */}
-      <div className="liquid-glass-thin liquid-elevate liquid-interactive sticky top-0 z-30 flex flex-col gap-1.5 rounded-2xl px-2 py-2">
-        <i aria-hidden="true" className="liquid-sheen" />
-        <i aria-hidden="true" className="liquid-specular" />
+      <div className="panel-quiet sticky top-0 z-30 flex flex-col gap-1.5 rounded-2xl px-2 py-2">
+        
+        
         {yearGroups.length === 0 && (
-          <p className="px-1 text-xs text-studio-400">还没有可导航的日期</p>
+          <p className="px-1 text-xs text-ink-400">还没有可导航的日期</p>
         )}
         {yearGroups.map((group) => (
           <div key={group.year} className="flex items-center gap-2">
@@ -134,11 +142,26 @@ export function TimelineRail({
                     aria-pressed={isActive}
                     aria-label={`跳转到 ${bucket.label}，共 ${bucket.coverageDays} 天练习`}
                     data-active-month={isActive ? 'true' : undefined}
-                    onClick={() => scrollToTimelineDate(bucket.firstDate)}
+                    title={
+                      renderedDates.includes(bucket.firstDate)
+                        ? undefined
+                        : '该月份尚未显示（先点「显示更早的日期」）'
+                    }
+                    onClick={() => {
+                      // The month's first date may be paginated out of the DOM;
+                      // scrollToDateSection then finds no target. Fall back to
+                      // the first rendered date of that month so the chip still
+                      // does something useful instead of nothing.
+                      const inMonth = renderedDates.filter((date) => date.startsWith(bucket.key));
+                      const target = renderedDates.includes(bucket.firstDate)
+                        ? bucket.firstDate
+                        : inMonth[inMonth.length - 1];
+                      if (target) scrollToTimelineDate(target);
+                    }}
                     className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] transition focus-visible:outline-none ${
                       isActive
                         ? 'border-accent/70 bg-accent/15 text-accent-soft'
-                        : 'border-studio-700 text-studio-300 hover:border-accent/50 hover:text-studio-100'
+                        : 'border-ink-700 text-ink-300 hover:border-accent/50 hover:text-ink-100'
                     }`}
                   >
                     {bucket.shortLabel}
@@ -172,7 +195,7 @@ export function TimelineRail({
               <li key={entry.date} className="contents">
                 {newMonth && (
                   <span
-                    className={`flex items-center gap-2 pl-[18px] text-[10px] uppercase tracking-wider text-studio-400 ${
+                    className={`flex items-center gap-2 pl-[18px] text-[10px] uppercase tracking-wider text-ink-400 ${
                       index === 0 ? '' : 'mt-3'
                     }`}
                   >
@@ -182,41 +205,46 @@ export function TimelineRail({
                 <a
                   href={`#date-${entry.date}`}
                   data-timeline-node={entry.date}
+                  onClick={(event) => {
+                    // Take over only when we can actually reach the target, so
+                    // the plain hash link remains the fallback.
+                    if (scrollToTimelineDate(entry.date)) event.preventDefault();
+                  }}
                   aria-current={isActive ? 'true' : undefined}
                   className={`group relative flex items-start gap-3 rounded-xl py-1.5 pl-[18px] pr-2 transition focus-visible:outline-none ${
                     isActive
                       ? 'bg-accent/12 shadow-[inset_0_1px_0_0_rgba(236,236,242,0.14),0_6px_18px_-12px_rgba(0,0,0,0.9)]'
-                      : 'hover:bg-studio-800/60'
+                      : 'hover:bg-ink-800/60'
                   }`}
                 >
                   <span
                     aria-hidden="true"
                     className={`absolute left-px top-[9px] h-[7px] w-[7px] rounded-full border transition ${
                       isActive
-                        ? 'animate-pulse-ring border-accent bg-accent-soft shadow-[0_0_12px_rgba(230,198,92,0.85)]'
-                        : 'border-studio-600 bg-studio-900 shadow-[inset_0_1px_0_0_rgba(236,236,242,0.18)] group-hover:border-accent/70 group-hover:shadow-[0_0_8px_rgba(201,162,39,0.5)]'
+                        ? ' border-accent bg-accent-soft shadow-[0_0_12px_rgba(230,198,92,0.85)]'
+                        : 'border-ink-600 bg-ink-900 shadow-[inset_0_1px_0_0_rgba(236,236,242,0.18)] group-hover:border-accent/70 group-hover:shadow-[0_0_8px_rgba(201,162,39,0.5)]'
                     }`}
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span
                         className={`truncate text-xs font-medium ${
-                          isActive ? 'text-accent-soft' : 'text-studio-100'
+                          isActive ? 'text-accent-soft' : 'text-ink-100'
                         }`}
                       >
                         {relativeDayLabel(entry.date, today)}
                       </span>
-                      <span className="shrink-0 text-[10px] tabular-nums text-studio-400">
+                      <span className="shrink-0 text-[10px] tabular-nums text-ink-400">
                         {entry.date.slice(5)}
                       </span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="shrink-0 text-[11px] text-studio-300">
+                      <span className="shrink-0 text-[11px] text-ink-300">
                         {entry.workCount} 件
                       </span>
                       <span
                         aria-hidden="true"
-                        className="h-1 w-12 overflow-hidden rounded-full bg-studio-700"
+                        className="h-1 w-12 overflow-hidden rounded-full bg-ink-700"
                       >
                         <span
                           className="block h-full rounded-full bg-gradient-to-r from-accent-soft to-ember"

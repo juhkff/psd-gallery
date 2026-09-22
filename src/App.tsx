@@ -1,24 +1,18 @@
 /**
  * App: gallery <-> viewer, driven by the URL hash (`#/2026-09-21/1`).
  *
- * The hash is the single source of navigation truth, so:
- *  - works are linkable/bookmarkable,
- *  - the browser back/forward buttons work without a router,
- *  - the gallery tile can stay a plain `<a href="#/...">`.
+ * The hash is the single source of navigation truth, so works are linkable and
+ * the browser back/forward buttons work without a router.
  *
- * The chrome is liquid glass (see src/index.css). One structural rule follows
- * from that: `backdrop-filter` samples what is behind an element, and it stops
- * working the moment an ancestor creates a containing block. So the shell keeps
- * its wrappers free of `overflow`, `filter`, `transform` and `opacity < 1`, and
- * clips with border-radius instead.
+ * COPY RULE for this file: a visitor should only read what helps them use the
+ * page. How it is built (workers, caches, decoding) is not their business, so
+ * that lives in comments like this one rather than on screen.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Gallery } from './components/Gallery';
-import { LiquidGlass } from './components/LiquidGlass';
 import { UnbuiltList } from './components/UnbuiltList';
 import { WorkViewer } from './components/WorkViewer';
-import { formatBytes } from './lib/format';
 import { listUnbuiltFiles } from './lib/index-loader';
 import { MANIFEST_EMPTY_MESSAGE } from './lib/manifest-loader';
 import { findWork, parseRoute } from './lib/route';
@@ -26,107 +20,33 @@ import { useManifest } from './lib/useManifest';
 import { useScrollReveal } from './lib/useScrollReveal';
 import { useServerIndex } from './lib/useServerIndex';
 
-const DAY_MS = 86_400_000;
-
 function readHash(): string {
   return typeof window === 'undefined' ? '' : window.location.hash;
 }
 
-/** Headline numbers for the hero, derived from the manifest alone. */
-interface HeroStats {
+interface IntroStats {
   works: number;
-  bytes: number;
   activeDays: number;
-  spanDays: number;
   latest: string | null;
 }
 
-function heroStats(groups: readonly { date: string; works: readonly { bytes: number }[] }[]): HeroStats {
+/** Totals for the intro. Derived from the manifest alone. */
+function introStats(groups: readonly { date: string; works: readonly unknown[] }[]): IntroStats {
   const works = groups.reduce((total, group) => total + group.works.length, 0);
-  const bytes = groups.reduce(
-    (total, group) => total + group.works.reduce((sum, work) => sum + work.bytes, 0),
-    0,
-  );
   const dates = groups.map((group) => group.date).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
-  if (dates.length === 0) {
-    return { works, bytes, activeDays: 0, spanDays: 0, latest: null };
-  }
   const sorted = [...dates].sort();
-  const first = Date.parse(`${sorted[0]}T00:00:00Z`);
-  const last = Date.parse(`${sorted[sorted.length - 1]}T00:00:00Z`);
   return {
     works,
-    bytes,
     activeDays: new Set(dates).size,
-    spanDays: Math.max(1, Math.round((last - first) / DAY_MS) + 1),
-    latest: sorted[sorted.length - 1],
+    latest: sorted.length > 0 ? sorted[sorted.length - 1] : null,
   };
 }
 
 /**
- * One headline figure. Each sits on its own pane and floats on a staggered delay
- * so the row reads as separate pieces of glass rather than one strip.
- */
-function Stat({ value, label, hint, delay = 0 }: {
-  value: string;
-  label: string;
-  hint?: string;
-  delay?: number;
-}) {
-  return (
-    <LiquidGlass
-      variant="thin"
-      elevate
-      interactive
-      className="animate-float hover-glow min-w-[8.5rem] px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_-18px_rgba(0,0,0,0.95)]"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <span className="font-display text-[1.75rem] leading-none text-gradient-gold">{value}</span>
-      <span className="mt-1.5 block text-[11px] tracking-wide text-studio-300">{label}</span>
-      {hint && <span className="mt-0.5 block text-[10px] text-studio-400">{hint}</span>}
-    </LiquidGlass>
-  );
-}
-
-function StateCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
-  return (
-    <LiquidGlass variant="pane" elevate className="mx-auto flex max-w-xl flex-col items-start gap-3 p-6">
-      <h2 className="font-display text-base font-semibold">{title}</h2>
-      <p className="text-sm leading-relaxed text-studio-300">{children}</p>
-      {action}
-    </LiquidGlass>
-  );
-}
-
-function GallerySkeleton() {
-  return (
-    <div className="flex flex-col gap-10" aria-hidden="true">
-      {[0, 1].map((section) => (
-        <div key={section} className="flex flex-col gap-4">
-          <div className="flex items-end gap-3 pb-2">
-            <div className="h-5 w-40 animate-pulse rounded-full bg-studio-800" />
-            <div className="h-3 w-16 animate-pulse rounded-full bg-studio-800" />
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, index) => (
-              <LiquidGlass key={index} variant="thin" className="p-3">
-                <div className="checkerboard aspect-[3/2] w-full animate-pulse rounded-xl" />
-                <div className="mt-2 h-3 w-1/2 animate-pulse rounded-full bg-studio-800" />
-              </LiquidGlass>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Reading progress: a light travelling along the top edge.
+ * Reading progress: a hairline along the top edge.
  *
- * Writes a scale transform directly via a ref instead of state, so scrolling
- * never re-renders the tree. Purely decorative, so it is hidden from assistive
- * tech and removed under prefers-reduced-motion.
+ * Writes a transform through a ref rather than state, so scrolling never
+ * re-renders the tree.
  */
 function ScrollProgress() {
   const bar = useRef<HTMLSpanElement | null>(null);
@@ -147,15 +67,74 @@ function ScrollProgress() {
     };
   }, []);
   return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] origin-left"
-    >
+    <span aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-50 h-px origin-left">
       <span
         ref={bar}
-        className="block h-full w-full origin-left scale-x-0 bg-gradient-to-r from-accent-soft via-accent to-ember shadow-[0_0_12px_rgba(201,162,39,0.55)] transition-transform duration-150 ease-out"
+        className="block h-full w-full origin-left scale-x-0 bg-ink-500/50 transition-transform duration-150 ease-out"
       />
     </span>
+  );
+}
+
+function StateCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="panel mx-auto flex max-w-lg flex-col items-start gap-3 p-6">
+      <h2 className="text-base font-medium">{title}</h2>
+      <p className="text-sm leading-relaxed text-ink-300">{children}</p>
+      {action}
+    </div>
+  );
+}
+
+function GallerySkeleton() {
+  return (
+    <div className="flex flex-col gap-12" aria-hidden="true">
+      {[0, 1].map((section) => (
+        <div key={section} className="flex flex-col gap-4">
+          <div className="h-5 w-36 animate-pulse rounded bg-ink-800" />
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="panel-quiet p-2">
+                <div className="aspect-[3/2] w-full animate-pulse rounded bg-ink-800" />
+                <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-ink-800" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Two lines, then the numbers. No tagline: the work is the introduction. */
+function Intro({ stats }: { stats: IntroStats }) {
+  return (
+    <section className="flex flex-col gap-6 pt-2">
+      <div className="flex flex-col gap-3">
+        <h1 className="font-display text-3xl leading-tight tracking-tight sm:text-4xl">
+          每日绘画练习
+        </h1>
+        <p className="max-w-prose text-sm leading-relaxed text-ink-300">
+          按日期归档的练习作品与 PSD 源文件。点开作品可以逐层查看图层。
+        </p>
+      </div>
+      <dl className="flex flex-wrap gap-x-10 gap-y-3">
+        <div className="flex items-baseline gap-2">
+          <dd className="readout font-display text-2xl leading-none">{stats.works}</dd>
+          <dt className="label">件作品</dt>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <dd className="readout font-display text-2xl leading-none">{stats.activeDays}</dd>
+          <dt className="label">天有练习</dt>
+        </div>
+        {stats.latest && (
+          <div className="flex items-baseline gap-2">
+            <dd className="readout font-display text-2xl leading-none">{stats.latest}</dd>
+            <dt className="label">最近一次</dt>
+          </div>
+        )}
+      </dl>
+    </section>
   );
 }
 
@@ -164,7 +143,6 @@ export function App() {
   const serverIndex = useServerIndex();
   const [hash, setHash] = useState<string>(readHash);
 
-  // One IntersectionObserver drives every `.reveal` on the page.
   useScrollReveal();
 
   useEffect(() => {
@@ -185,88 +163,34 @@ export function App() {
   }, [hash]);
 
   const closeViewer = useCallback(() => {
-    // Keep it a hash change so the browser history stays consistent.
     window.location.hash = '#/';
   }, []);
 
-  const stats = useMemo(() => heroStats(manifest?.groups ?? []), [manifest]);
-  const showHero = status === 'ready' && !!manifest && !selection && !route;
+  const stats = useMemo(() => introStats(manifest?.groups ?? []), [manifest]);
+  const showIntro = status === 'ready' && !!manifest && !selection && !route;
 
   return (
     <div className="relative min-h-screen w-full">
       <ScrollProgress />
-      {/* Ambient light. Fixed and pointer-transparent, so it never eats a click
-          and never moves with scroll (which would make the glass look liquid
-          rather than like a pane of it). */}
-      <div className="studio-backdrop pointer-events-none absolute inset-x-0 top-0 -z-10" aria-hidden="true" />
-      <div
-        className="grain-overlay pointer-events-none fixed inset-0 -z-10 opacity-[0.06] mix-blend-overlay"
-        aria-hidden="true"
-      />
-      {/* A soft aurora band behind the content. This is what makes the glass
-          read as glass: a translucent pane is only convincing when there is
-          something coloured behind it to bend. Kept well below text contrast. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[16vh] -z-10 h-[50vh] opacity-[0.8] blur-3xl"
-        style={{
-          background:
-            'linear-gradient(100deg, color-mix(in oklab, var(--color-ion) 78%, transparent), color-mix(in oklab, var(--color-ice) 52%, transparent) 45%, color-mix(in oklab, var(--color-ember) 66%, transparent))',
-          maskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
-        }}
-      />
-      {/* A slow drifting bloom, so the glass always has something moving behind it. */}
-      <div
-        className="animate-drift pointer-events-none absolute -z-10 h-[42rem] w-[42rem] rounded-full opacity-60 blur-3xl"
-        style={{
-          top: '-12rem',
-          left: '-10rem',
-          background:
-            'radial-gradient(circle, color-mix(in oklab, var(--color-ion) 62%, transparent), transparent 66%)',
-        }}
-        aria-hidden="true"
-      />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-[1560px] flex-col px-4 sm:px-6">
-        {/* Deliberately NOT sticky: the timeline rail is the only sticky layer on
-            the page, so its month scrubber can pin to the viewport top without
-            having to stack under a second sticky element. */}
-        <header className="mb-2">
-          <LiquidGlass
-            variant="pane"
-            refract
-            elevate
-            as="div"
-            className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-3"
-          >
-            <a href="#/" className="group flex items-center gap-2.5">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-accent/60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
-              </span>
-              <span className="font-display text-sm font-semibold tracking-wide">绘画练习图库</span>
+      <div className="mx-auto flex min-h-screen w-full max-w-[1200px] flex-col px-5 sm:px-8">
+        <header className="pt-7 pb-6">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <a href="#/" className="text-[15px] font-medium tracking-wide text-ink-100">
+              绘画练习
             </a>
-            <span className="hidden text-[11px] text-studio-400 md:inline">
-              每日练习 · PSD 图层在线查看 · 源文件下载
-            </span>
             {stats.works > 0 && (
-              <span className="ml-auto flex items-center gap-3 text-[11px] text-studio-300">
-                <span>{stats.works} 件作品</span>
-                <span className="text-studio-600">/</span>
-                <span>{stats.activeDays} 个练习日</span>
-                <span className="hidden text-studio-600 sm:inline">/</span>
-                <span className="hidden sm:inline">{formatBytes(stats.bytes)}</span>
+              <span className="label">
+                {stats.works} 件 · {stats.activeDays} 天
+                {stats.latest ? ` · 最近 ${stats.latest}` : ''}
               </span>
             )}
-          </LiquidGlass>
+          </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col pb-10">
-          {showHero && <Hero stats={stats} />}
-
+        <main className="flex min-h-0 flex-1 flex-col pb-16">
           {status === 'loading' && (
-            <div className="mt-6">
+            <div className="mt-4">
               <GallerySkeleton />
             </div>
           )}
@@ -275,14 +199,10 @@ export function App() {
 
           {status === 'error' && (
             <StateCard
-              title="无法加载作品清单"
+              title="作品清单加载失败"
               action={
-                <button
-                  type="button"
-                  onClick={reload}
-                  className="rounded-full border border-studio-600 px-4 py-1.5 text-sm transition hover:border-accent hover:text-accent"
-                >
-                  重新加载
+                <button type="button" onClick={reload} className="btn-quiet px-4 py-1.5 text-sm">
+                  重试
                 </button>
               }
             >
@@ -295,77 +215,28 @@ export function App() {
           )}
 
           {status === 'ready' && manifest && !selection && route && (
-            <StateCard title="找不到这个作品">
-              链接中的作品（{route.date} / {route.name}）不在当前清单里，可能已被移除或重命名。
-              <a href="#/" className="text-accent underline underline-offset-2">
+            <StateCard title="没有这个作品">
+              链接里的作品（{route.date} / {route.name}）不在清单中，可能已被移除或改名。
+              <a href="#/" className="text-accent-soft underline underline-offset-2">
                 返回图库
               </a>
             </StateCard>
           )}
 
           {status === 'ready' && manifest && !selection && !route && (
-            <div className="mt-8 flex flex-col gap-14">
+            <div className="flex flex-col gap-16">
+              {showIntro && <Intro stats={stats} />}
               <Gallery groups={manifest.groups} selected={null} />
               <UnbuiltList groups={unbuilt} />
             </div>
           )}
         </main>
 
-        <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 py-4 text-[11px] text-studio-400">
-          <span>PSD 解码完全在本地浏览器中进行（Web Worker + IndexedDB 缓存），不会上传任何文件。</span>
-          {stats.latest && <span className="ml-auto">最近更新 {stats.latest}</span>}
+        <footer className="mt-auto border-t border-ink-800 py-5">
+          <p className="label">本地练习归档</p>
         </footer>
       </div>
     </div>
-  );
-}
-
-/** Big editorial opening: title, one-line intent, and the headline numbers. */
-function Hero({ stats }: { stats: HeroStats }) {
-  return (
-    <LiquidGlass
-      variant="pane"
-      elevate
-      as="section"
-      className="reveal relative mt-4 px-5 py-9 sm:px-9 sm:py-12"
-    >
-      {/* Inner refraction fringe: a bright arc at the top edge and a cool one at
-          the bottom, which is how a thick sheet of glass catches light. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-6 -top-px h-px bg-gradient-to-r from-transparent via-studio-100/60 to-transparent"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-10 -bottom-px h-px bg-gradient-to-r from-transparent via-ice/35 to-transparent"
-      />
-
-      <p className="mb-4 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.3em] text-accent/90">
-        <span className="inline-block h-px w-10 bg-gradient-to-r from-transparent to-accent/70" />
-        <span className="rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1 text-accent-soft">
-          Drawing Practice Archive
-        </span>
-      </p>
-      <h1 className="font-display text-4xl leading-tight tracking-tight sm:text-6xl">
-        每日练习<span className="text-gradient-gold">·</span>
-        <span className="text-gradient-ice">时间线</span>
-      </h1>
-      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-studio-300 sm:text-base">
-        按日期归档的绘画练习与 PSD 工程文件。在浏览器里逐层查看图层、随时隐藏或显示，
-        原始 PSD 一键下载 —— 解析全部在本机完成。
-      </p>
-      <div className="mt-7 flex flex-wrap gap-3">
-        <Stat value={String(stats.works)} label="件作品" hint="已归档" delay={0} />
-        <Stat value={String(stats.activeDays)} label="个练习日" hint="有产出的天数" delay={420} />
-        <Stat value={String(stats.spanDays)} label="天跨度" hint="首件至今" delay={840} />
-        <Stat
-          value={stats.bytes >= 1024 ** 3 ? `${(stats.bytes / 1024 ** 3).toFixed(1)}G` : `${(stats.bytes / 1024 ** 2).toFixed(0)}M`}
-          label="源文件总量"
-          hint="PSD 字节数"
-          delay={1260}
-        />
-      </div>
-    </LiquidGlass>
   );
 }
 

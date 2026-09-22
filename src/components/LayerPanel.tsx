@@ -28,8 +28,8 @@
  * colour, is what says "this belongs to that group".
  *
  * LIQUID GLASS
- * The panel is one `liquid-glass` pane (with its moving sheen) and every layer
- * row is a `liquid-glass-thin` surface: hover/selection brighten the row's rim
+ * The panel is one `panel` pane (with its moving sheen) and every layer
+ * row is a `panel-quiet` surface: hover/selection brighten the row's rim
  * (border color, not an opaque wash) and selection adds a gold rail plus a soft
  * glow. The eye button keeps its single-svg child contract; state is expressed
  * with the icon shape, the fill and a ring rather than a wrapper element.
@@ -67,7 +67,7 @@ function EyeIcon({ open }: { open: boolean }) {
 /** A group marker: a stacked-folders glyph, so groups are not "just bold". */
 function GroupIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0 text-studio-400" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+    <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0 text-ink-400" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
       <path d="M1.8 12.2V4.4h4l1.2 1.5h7.2v6.3z" />
       <path d="M3.4 8.1h9.2" />
     </svg>
@@ -88,14 +88,14 @@ function Chip({
   title?: string;
 }) {
   const tones = {
-    neutral: 'text-studio-300',
+    neutral: 'text-ink-300',
     accent: 'text-accent-soft',
     warn: 'text-amber-300',
   } as const;
   return (
     <span
       title={title}
-      className={`liquid-glass-thin inline-flex h-4 shrink-0 items-center rounded-full px-1.5 text-[10px] leading-none ${tones[tone]}`}
+      className={`panel-quiet inline-flex h-4 shrink-0 items-center rounded-full px-1.5 text-[10px] leading-none ${tones[tone]}`}
     >
       <span className="relative z-[1]">{children}</span>
     </span>
@@ -155,10 +155,10 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
         data-selected={selected ? 'true' : undefined}
         onClick={() => onSelect(id)}
         style={{ paddingLeft: `${8 + depth * INDENT}px` }}
-        className={`liquid-glass-thin hover-glow group relative grid min-h-[3.75rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl py-1.5 pr-2.5 ${
+        className={`panel-quiet  group relative grid min-h-[3.75rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl py-1.5 pr-2.5 ${
           selected
             ? 'border-accent/50 shadow-[0_0_0_1px_rgba(201,162,39,0.22),0_18px_36px_-22px_rgba(201,162,39,0.85)]'
-            : 'border-studio-100/10 hover:border-studio-100/25 hover:shadow-[0_14px_30px_-20px_rgba(0,0,0,0.95)]'
+            : 'border-ink-100/10 hover:border-ink-100/25 hover:shadow-[0_14px_30px_-20px_rgba(0,0,0,0.95)]'
         }`}
       >
         {/* Selection: a warm wash, a gold rail on the leading edge and a soft
@@ -188,12 +188,12 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
               return (
                 <span
                   key={index}
-                  className={`relative w-4 border-l ${deepest ? 'border-studio-400/40' : 'border-studio-600/45'}`}
+                  className={`relative w-4 border-l ${deepest ? 'border-ink-400/40' : 'border-ink-600/45'}`}
                 >
                   {deepest && (
                     <span
                       aria-hidden="true"
-                      className="absolute left-0 h-px w-2.5 bg-studio-400/45"
+                      className="absolute left-0 h-px w-2.5 bg-ink-400/45"
                       style={{ top: ELBOW_TOP + 4 }}
                     />
                   )}
@@ -219,7 +219,7 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
           className={`relative z-[1] grid h-7 w-7 shrink-0 place-items-center rounded-[9px] border transition duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${
             own
               ? 'border-accent/35 bg-gradient-to-b from-accent/25 to-accent/[0.06] text-accent-soft shadow-[inset_0_1px_0_rgba(236,236,242,0.22)] hover:border-accent/60 hover:from-accent/35'
-              : 'border-studio-100/10 bg-studio-950/50 text-studio-400 hover:border-studio-100/25 hover:text-studio-200'
+              : 'border-ink-100/10 bg-ink-950/50 text-ink-400 hover:border-ink-100/25 hover:text-ink-200'
           }`}
         >
           <EyeIcon open={own} />
@@ -230,7 +230,7 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
             {node.isGroup && <GroupIcon />}
             <span
               className={`truncate text-[13px] leading-5 ${node.isGroup ? 'font-semibold' : ''} ${
-                shown ? 'text-studio-100' : 'text-studio-400'
+                shown ? 'text-ink-100' : 'text-ink-400'
               }`}
             >
               {node.name}
@@ -249,13 +249,13 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
               </Chip>
             )}
             {node.opacity < 1 && (
-              <span className="tabular-nums text-studio-300" title="图层不透明度">
+              <span className="tabular-nums text-ink-300" title="图层不透明度">
                 {formatOpacity(node.opacity)}
               </span>
             )}
-            {!node.isGroup && <span className="tabular-nums text-studio-400">{formatSize(width, height)} px</span>}
-            {!node.hasImage && !node.isGroup && <span className="text-studio-400">无像素数据</span>}
-            {node.isGroup && <span className="tabular-nums text-studio-400">{childCount} 个子图层</span>}
+            {!node.isGroup && <span className="tabular-nums text-ink-400">{formatSize(width, height)} px</span>}
+            {!node.hasImage && !node.isGroup && <span className="text-ink-500">无像素</span>}
+            {node.isGroup && <span className="tabular-nums text-ink-400">{childCount} 项</span>}
             {node.note && <span className="text-amber-300/90">{node.note}</span>}
             {buried && <span className="text-amber-300/90">所在组已隐藏</span>}
           </div>
@@ -319,18 +319,18 @@ function LayerSkeleton() {
   const widths = ['72%', '54%', '64%', '46%', '58%', '40%'];
   return (
     <div className="flex flex-col gap-2 py-1">
-      <p className="text-xs leading-relaxed text-studio-300">正在解码图层…图层列表会在画面合成完成后出现。</p>
+      <p className="text-xs leading-relaxed text-ink-300">正在读取图层…</p>
       <div aria-hidden="true" className="flex flex-col gap-1">
         {widths.map((width, index) => (
           <div
             key={index}
-            className="liquid-glass-thin grid min-h-[3.75rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl py-1.5 pr-2.5"
+            className="panel-quiet grid min-h-[3.75rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl py-1.5 pr-2.5"
             style={{ paddingLeft: `${8 + (index % 3) * INDENT}px` }}
           >
-            <span className="h-7 w-7 shrink-0 rounded-[9px] bg-studio-800/80" />
+            <span className="h-7 w-7 shrink-0 rounded-[9px] bg-ink-800/80" />
             <span className="flex min-h-7 flex-col justify-center gap-2">
-              <span className="shimmer-line h-3 rounded bg-studio-800/80" style={{ width }} />
-              <span className="h-2.5 w-24 rounded bg-studio-800/60" />
+              <span className="shimmer-line h-3 rounded bg-ink-800/80" style={{ width }} />
+              <span className="h-2.5 w-24 rounded bg-ink-800/60" />
             </span>
           </div>
         ))}
@@ -363,7 +363,7 @@ export function LayerPanel({
   const select = (id: string) => setSelectedId((current) => (current === id ? null : id));
 
   const controlClass =
-    'rounded-full px-2 py-1 text-[11px] text-studio-300 transition hover:bg-accent/[0.12] hover:text-accent-soft disabled:cursor-not-allowed disabled:opacity-40';
+    'rounded-full px-2 py-1 text-[11px] text-ink-300 transition hover:bg-accent/[0.12] hover:text-accent-soft disabled:cursor-not-allowed disabled:opacity-40';
 
   // Height comes from the row: `items-stretch` matches the panel to the viewer
   // column, and `min-h-0` keeps a 60-layer document from growing the page - the
@@ -371,19 +371,19 @@ export function LayerPanel({
   // than the viewer column at a 1000px viewport, so the pane hung past the fold
   // and read as an unfinished rectangle.)
   return (
-    <section className="liquid-glass liquid-interactive flex min-h-0 flex-col p-3 lg:w-80 lg:shrink-0">
+    <section className="panel flex min-h-0 flex-col p-3 lg:w-80 lg:shrink-0">
       <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-3">
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="flex items-baseline gap-2 font-display text-sm font-semibold tracking-wide text-studio-100">
-                <span className="text-gradient-ice">图层</span>
-                <span className="text-[11px] font-normal tabular-nums text-studio-300">
+              <h2 className="flex items-baseline gap-2 font-display text-sm font-semibold tracking-wide text-ink-100">
+                <span>图层</span>
+                <span className="text-[11px] font-normal tabular-nums text-ink-300">
                   {rowsVisible ? `${stats.seen} / ${total} 显示` : `${layerCount} 个`}
                 </span>
               </h2>
-              <p className="mt-0.5 text-[10px] leading-relaxed text-studio-400">
-                点击行选中 · 眼睛按钮切换显示（本地重绘，不重新解码）
+              <p className="mt-0.5 text-[10px] leading-relaxed text-ink-400">
+                点击行选中 · 眼睛按钮控制显示
               </p>
             </div>
             <button
@@ -391,29 +391,29 @@ export function LayerPanel({
               aria-expanded={open}
               aria-controls="layer-panel-body"
               onClick={() => setOpen((value) => !value)}
-              className="shrink-0 rounded-full border border-studio-100/15 bg-studio-100/[0.05] px-2 py-0.5 text-[11px] font-normal text-studio-300 transition hover:border-accent hover:text-accent lg:hidden"
+              className="shrink-0 rounded-full border border-ink-100/15 bg-ink-100/[0.05] px-2 py-0.5 text-[11px] font-normal text-ink-300 transition hover:border-accent hover:text-accent lg:hidden"
             >
               {open ? '收起' : '展开'}
             </button>
           </div>
 
-          <div aria-hidden="true" className="glass-divider mt-2.5" />
+          <div aria-hidden="true" className="rule mt-2.5" />
 
           {/* Segmented control: pill wrapper, pill segments, hairline dividers. */}
-          <div className="mt-2.5 flex items-stretch rounded-full border border-studio-100/10 bg-studio-950/40 p-0.5">
+          <div className="mt-2.5 flex items-stretch rounded-full border border-ink-100/10 bg-ink-950/40 p-0.5">
             <button type="button" onClick={onShowAll} disabled={disabled} className={`flex-1 ${controlClass}`}>
               全部显示
             </button>
             <span
               aria-hidden="true"
-              className="my-1 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-100/15 to-transparent"
+              className="my-1 w-px shrink-0 bg-gradient-to-b from-transparent via-ink-100/15 to-transparent"
             />
             <button type="button" onClick={onHideAll} disabled={disabled} className={`flex-1 ${controlClass}`}>
               全部隐藏
             </button>
             <span
               aria-hidden="true"
-              className="my-1 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-100/15 to-transparent"
+              className="my-1 w-px shrink-0 bg-gradient-to-b from-transparent via-ink-100/15 to-transparent"
             />
             <button type="button" onClick={onReset} disabled={disabled} className={`flex-1 ${controlClass}`}>
               恢复默认
@@ -455,8 +455,8 @@ export function LayerPanel({
         </div>
       </div>
 
-      <i aria-hidden="true" className="liquid-sheen" />
-      <i aria-hidden="true" className="liquid-specular" />
+      
+      
     </section>
   );
 }

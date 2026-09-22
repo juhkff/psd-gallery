@@ -705,10 +705,10 @@
   <header class="masthead">
     <p class="eyebrow">Local Studio</p>
     <h1>图库管理端</h1>
-    <p class="sub">把 PSD 拖进来 → 自动生成预览与图层清单 → 点「发布」才会提交并推送到 GitHub。仅本机可用。</p>
+    <p class="sub">把 PSD 拖进来，确认后点「发布」推送到 GitHub。</p>
     <div class="pills">
-      <span class="pill"><i></i>草稿不提交</span>
-      <span class="pill ion"><i></i>本地解码</span>
+      <span class="pill"><i></i>草稿</span>
+      <span class="pill ion"><i></i></span>
       <span class="pill ice"><i></i>127.0.0.1</span>
     </div>
   </header>
@@ -717,15 +717,15 @@
     <i class="sheen" aria-hidden="true"></i>
     <div class="pane-body">
       <div class="panel-head">
-        <span class="dot" aria-hidden="true"></span>
+        
         <span class="panel-eyebrow">添加作品</span>
-        <span class="panel-tail">选日期 → 拖入 .psd → 发布</span>
+        
       </div>
-      <span class="glass-divider" aria-hidden="true"></span>
+      
 
       <div class="row fields">
         <div>
-          <label for="date">放到的日期文件夹</label>
+          <label for="date">日期</label>
           <input type="date" id="date" />
         </div>
         <div class="grow"></div>
@@ -744,15 +744,15 @@
           </svg>
         </span>
         <strong>把 .psd 文件拖到这里</strong>
-        <span class="drop-sub">可以一次拖多个；文件名会自动改成 1.psd、2.psd… 按数字排序</span>
+        <span class="drop-sub">可一次拖多个，自动按 1、2、3 命名</span>
         <span class="drop-state">
-          <span class="s-idle">或点这里选择文件</span>
+          <span class="s-idle">或点击选择文件</span>
           <span class="s-hot">松开鼠标即开始上传</span>
         </span>
       </div>
       <input type="file" id="file" accept=".psd" multiple class="hidden" />
       <div id="progress-bar" class="bar hidden"><i></i></div>
-      <div class="hint">单文件上限 100 MiB（GitHub 硬限制，走 LFS 也一样）。草稿在发布前不会提交。</div>
+      <div class="hint">单个文件不超过 100 MiB。</div>
     </div>
   </section>
 
@@ -761,20 +761,20 @@
       <div class="sec-label">
         <span class="sec-eyebrow" aria-hidden="true">Pending drafts</span>
         <div class="sec-title">
-          <span class="dot" aria-hidden="true"></span>
+          
           <h2>待发布草稿</h2>
           <span id="draft-count" class="tag">0</span>
         </div>
       </div>
-      <span class="sec-tail">上传后点「发布」才进图库</span>
+      
     </div>
-    <span class="glass-divider" aria-hidden="true"></span>
+    
   </div>
   <div id="drafts"></div>
   <div class="row actions">
-    <button id="publish" class="primary" disabled>发布（提交并推送）</button>
+    <button id="publish" class="primary" disabled>发布</button>
     <button id="refresh" class="ghost">刷新</button>
-    <span class="cta-note">还没有草稿：先把 .psd 拖进上面的面板</span>
+    <span class="cta-note">还没有待发布的文件</span>
   </div>
   <div id="log" class="hidden"></div>
 
@@ -783,14 +783,14 @@
       <div class="sec-label">
         <span class="sec-eyebrow" aria-hidden="true">Archived works</span>
         <div class="sec-title">
-          <span class="dot ice" aria-hidden="true"></span>
+          
           <h2>已归档作品</h2>
           <span id="work-count" class="tag">0</span>
         </div>
       </div>
-      <span class="sec-tail">works/ 目录 · 只读</span>
+      
     </div>
-    <span class="glass-divider" aria-hidden="true"></span>
+    
   </div>
   <ul id="works"></ul>
 </div>

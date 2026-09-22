@@ -14,8 +14,8 @@
  * panned. Zooming only touches layout/transform; decode stays in the worker.
  *
  * LIQUID GLASS
- * The whole stage is one `liquid-glass` sheet (LiquidGlass renders the moving
- * sheen layer over it). Inside it the document sits on a recessed `artwork-mat`
+ * The whole stage is one `panel` sheet (LiquidGlass renders the moving
+ * sheen layer over it). Inside it the document sits on a recessed `well`
  * with a mounted-print edge (hairline ring + contact shadow), so the picture
  * reads as a print lying *behind* the glass rather than a texture painted on a
  * dark rectangle. The reflection is ONE narrow diagonal band painted across the
@@ -37,13 +37,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { WorkEntry } from '../../shared/manifest';
 import { formatDateLabel } from '../../shared/paths';
 import { formatBytes, formatMegapixels, formatScale, formatSize } from '../lib/format';
-import { useLiquidPointer } from '../lib/useLiquidPointer';
 import { forceProxyFromHash } from '../lib/route';
 import { collectCaveats } from '../psd/layer-info';
 import { usePsdWork } from '../psd/usePsdWork';
 import { DecodeProgress } from './DecodeProgress';
 import { LayerPanel } from './LayerPanel';
-import { LiquidGlass } from './LiquidGlass';
 import { Toolbar } from './Toolbar';
 
 /** Absolute zoom bounds, in CSS pixels per document pixel. */
@@ -76,14 +74,14 @@ export interface WorkViewerProps {
  */
 function MetaStrip({ items }: { items: ReactNode[] }) {
   return (
-    <div className="liquid-glass-thin inline-flex h-7 items-stretch rounded-full ring-1 ring-inset ring-studio-100/[0.05]">
+    <div className="panel-quiet inline-flex h-7 items-stretch rounded-full ring-1 ring-inset ring-ink-100/[0.05]">
       {items.map((item, index) => (
         <span
           key={index}
-          className="relative inline-flex items-center px-3 text-[11px] leading-none tabular-nums text-studio-200"
+          className="relative inline-flex items-center px-3 text-[11px] leading-none tabular-nums text-ink-200"
         >
           {index > 0 && (
-            <span aria-hidden="true" className="absolute inset-y-[7px] left-0 w-px bg-studio-100/[0.14]" />
+            <span aria-hidden="true" className="absolute inset-y-[7px] left-0 w-px bg-ink-100/[0.14]" />
           )}
           {item}
         </span>
@@ -115,7 +113,7 @@ function ZoomButton({
       className={`hover-glow grid h-7 min-w-7 place-items-center rounded-full px-2 text-[11px] leading-none ${
         active
           ? 'bg-gradient-to-b from-accent/30 to-accent/[0.08] text-accent-soft ring-1 ring-inset ring-accent/45 shadow-[inset_0_1px_0_rgba(236,236,242,0.28),0_6px_16px_-8px_rgba(201,162,39,0.85)]'
-          : 'text-studio-300 hover:bg-studio-100/[0.09] hover:text-studio-100 hover:shadow-[0_6px_16px_-10px_rgba(0,0,0,0.9)]'
+          : 'text-ink-300 hover:bg-ink-100/[0.09] hover:text-ink-100 hover:shadow-[0_6px_16px_-10px_rgba(0,0,0,0.9)]'
       }`}
     >
       {children}
@@ -140,7 +138,6 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
   // `.liquid-interactive` ancestor of the hovered node, so a single listener
   // drives every specular highlight on this surface (badge, zoom cluster, ...)
   // without a React re-render per pointer move.
-  const { ref: viewerRef, onPointerMove } = useLiquidPointer<HTMLDivElement>();
 
   // Drawing one bitmap is a sub-millisecond main-thread operation; decoding
   // never happens here.
@@ -272,13 +269,13 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
   const allCaveats = caveats.length > 0;
 
   return (
-    <div ref={viewerRef} onPointerMove={onPointerMove} className="flex min-h-0 flex-col gap-4">
+    <div className="flex min-h-0 flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <button
             type="button"
             onClick={onClose}
-            className="liquid-glass-thin liquid-interactive group inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-studio-300 transition hover:text-accent"
+            className="panel-quiet group inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-ink-300 transition hover:text-accent"
           >
             <svg
               viewBox="0 0 16 16"
@@ -292,23 +289,23 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
               <path d="M5.5 8H13" />
             </svg>
             <span className="relative z-[1]">返回图库</span>
-            <i aria-hidden="true" className="liquid-specular" />
+            
           </button>
 
           {/* Three ranks, not two: the date is a quiet caption in the display
               face, the filename is the page's headline, and the extension is
               demoted so the *name* is what the eye lands on. */}
           <h1 className="mt-2.5 flex min-w-0 items-center gap-3">
-            <span className="shrink-0 font-display text-[13px] tracking-[0.01em] text-studio-400">
+            <span className="shrink-0 font-display text-[13px] tracking-[0.01em] text-ink-400">
               {formatDateLabel(date)}
             </span>
             <span
               aria-hidden="true"
-              className="h-4 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-600 to-transparent"
+              className="h-4 w-px shrink-0 bg-gradient-to-b from-transparent via-ink-600 to-transparent"
             />
-            <span className="truncate text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] text-studio-100">
+            <span className="truncate text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] text-ink-100">
               {work.name}
-              <span className="font-normal text-studio-400">.psd</span>
+              <span className="font-normal text-ink-400">.psd</span>
             </span>
           </h1>
 
@@ -335,7 +332,7 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
           data-testid="download-psd"
           href={work.psd}
           download={`${date}-${work.name}.psd`}
-          className="liquid-cta liquid-rim inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:brightness-[1.08] active:scale-[0.98]"
+          className="inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:brightness-[1.08] active:scale-[0.98]"
         >
           <span className="relative z-[1] inline-flex items-center gap-2">
             <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
@@ -344,11 +341,11 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
               <path d="M3 12.5h10" />
             </svg>
             下载 PSD
-            <span className="rounded-md bg-studio-950/15 px-1.5 py-px text-[11px] font-medium tabular-nums">
+            <span className="rounded-md bg-ink-950/15 px-1.5 py-px text-[11px] font-medium tabular-nums">
               {formatBytes(work.bytes)}
             </span>
           </span>
-          <i aria-hidden="true" className="liquid-sheen" />
+          
         </a>
       </header>
 
@@ -360,17 +357,17 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                 and the floating chrome are outside it. `refract` is the thick
                 glass variant and is only allowed on a large, mostly static
                 surface - this frame is exactly that (the scroller is a child). */}
-            <LiquidGlass variant="pane" refract className="p-2">
+            <div className="panel p-2">
               <div
                 ref={stageRef}
                 tabIndex={0}
                 role="region"
-                aria-label="作品画布：可缩放、可滚动"
-                title="双击在适应窗口与 100% 之间切换 · Ctrl/⌘ + 滚轮缩放 · 焦点上用 +/-/0/1 键"
+                aria-label="作品画面"
+                title="双击切换适应窗口 / 100%；Ctrl 或 ⌘ + 滚轮缩放"
                 onDoubleClick={toggleFitAndActual}
                 onKeyDown={onStageKeyDown}
                 style={{ height: 'clamp(20rem, 62vh, 48rem)' }}
-                className="artwork-mat relative overflow-auto overscroll-contain rounded-[14px]"
+                className="well relative overflow-auto overscroll-contain rounded-[14px]"
               >
                 <div className="flex min-h-full min-w-full p-4">
                   {/* The print: a crisp mounted sheet on the mat. The 1px ring
@@ -378,7 +375,7 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                       shadow only appears *outside* the print, so 1:1 inspection
                       stays untouched. */}
                   <div
-                    className="checkerboard relative m-auto shrink-0 rounded-[3px] ring-1 ring-studio-100/[0.18] shadow-[0_26px_50px_-26px_rgba(0,0,0,0.95),0_5px_14px_-8px_rgba(0,0,0,0.8)]"
+                    className="checkerboard relative m-auto shrink-0 rounded-[3px] ring-1 ring-ink-100/[0.18] shadow-[0_26px_50px_-26px_rgba(0,0,0,0.95),0_5px_14px_-8px_rgba(0,0,0,0.8)]"
                     style={surfaceStyle}
                   >
                     {preview.display && (
@@ -405,7 +402,7 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                 </div>
               </div>
 
-              {/* Mat light. `artwork-mat` is deliberately near-black so the print
+              {/* Mat light. `well` is deliberately near-black so the print
                   has maximum contrast, but an evenly black field reads as a hole
                   rather than as a surface. One pool of light in the lit corner -
                   screen-blended, so it lifts the mat and leaves the print
@@ -426,16 +423,16 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 rounded-[14px] mix-blend-screen bg-[linear-gradient(134deg,transparent_0%,rgba(236,236,242,0.04)_5%,rgba(143,208,232,0.17)_10%,rgba(236,236,242,0.045)_15%,transparent_21%)]"
               />
-            </LiquidGlass>
+            </div>
 
             {/* Live/preview state, floating over the artwork: real glass, so its
-                backdrop is the canvas itself. `liquid-glass-thin` alone (no
+                backdrop is the canvas itself. `panel-quiet` alone (no
                 `elevate`) is deliberate - both utilities set `box-shadow`, so
                 elevate's generic shadow would overwrite the pane's own bevel,
                 which is exactly the rim light that makes a small lozenge read as
                 frosted rather than as a flat chip. */}
             <div className="pointer-events-none absolute left-3 top-3 z-10">
-              <div className="liquid-glass-thin liquid-interactive pointer-events-auto inline-flex h-7 items-center gap-2 overflow-hidden rounded-full pl-2.5 pr-3 text-[10px] leading-none tracking-wide text-studio-200 ring-1 ring-inset ring-studio-100/[0.10]">
+              <div className="panel-quiet pointer-events-auto inline-flex h-7 items-center gap-2 overflow-hidden rounded-full pl-2.5 pr-3 text-[10px] leading-none tracking-wide text-ink-200 ring-1 ring-inset ring-ink-100/[0.10]">
                 {/* Front-face light: over the mat there is nothing to blur, so the
                     lozenge has to carry its own light or it reads as a flat chip.
                     `overflow-hidden` clips it to the pill; no glass inside. */}
@@ -448,36 +445,36 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                   className={`relative z-[1] h-1.5 w-1.5 rounded-full ${
                     frame
                       ? 'bg-accent shadow-[0_0_8px_rgba(201,162,39,0.9)]'
-                      : 'bg-studio-400 shadow-[0_0_6px_rgba(0,0,0,0.8)]'
+                      : 'bg-ink-400 shadow-[0_0_6px_rgba(0,0,0,0.8)]'
                   }`}
                 />
-                <span className="relative z-[1]">{frame ? '在线合成' : '预览图'}</span>
-                <i aria-hidden="true" className="liquid-specular" />
+                <span className="relative z-[1]">{frame ? '图层合成' : '预览图'}</span>
+                
               </div>
             </div>
 
             <div className="pointer-events-none absolute bottom-3 right-3 z-30">
-              <div className="liquid-glass-thin liquid-interactive pointer-events-auto flex items-center gap-0.5 rounded-full p-1 ring-1 ring-inset ring-studio-100/[0.07]">
-                <ZoomButton active={zoomMode === 'fit'} onClick={fitToWindow} label="适应窗口" title="适应窗口（快捷键 0）">
+              <div className="panel-quiet pointer-events-auto flex items-center gap-0.5 rounded-full p-1 ring-1 ring-inset ring-ink-100/[0.07]">
+                <ZoomButton active={zoomMode === 'fit'} onClick={fitToWindow} label="适应窗口" title="适应窗口（0）">
                   适应窗口
                 </ZoomButton>
-                <ZoomButton active={zoomMode === 'actual'} onClick={actualSize} label="实际像素 100%" title="实际像素 100%（快捷键 1）">
+                <ZoomButton active={zoomMode === 'actual'} onClick={actualSize} label="实际大小" title="实际大小（1）">
                   100%
                 </ZoomButton>
                 <span
                   aria-hidden="true"
-                  className="mx-1 h-5 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-100/25 to-transparent"
+                  className="mx-1 h-5 w-px shrink-0 bg-gradient-to-b from-transparent via-ink-100/25 to-transparent"
                 />
-                <ZoomButton onClick={() => zoomBy(1 / ZOOM_STEP)} label="缩小" title="缩小（快捷键 -）">
+                <ZoomButton onClick={() => zoomBy(1 / ZOOM_STEP)} label="缩小" title="缩小（-）">
                   −
                 </ZoomButton>
-                <span className="min-w-[3.4rem] px-0.5 text-center text-[12.5px] font-medium leading-none tabular-nums text-studio-100">
+                <span className="min-w-[3.4rem] px-0.5 text-center text-[12.5px] font-medium leading-none tabular-nums text-ink-100">
                   {formatScale(scale)}
                 </span>
-                <ZoomButton onClick={() => zoomBy(ZOOM_STEP)} label="放大" title="放大（快捷键 +）">
+                <ZoomButton onClick={() => zoomBy(ZOOM_STEP)} label="放大" title="放大（+）">
                   +
                 </ZoomButton>
-                <i aria-hidden="true" className="liquid-specular" />
+                
               </div>
             </div>
 
@@ -492,8 +489,8 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
 
             {!frame && !busy && psd.status === 'error' && (
               <div className="pointer-events-none absolute inset-x-0 bottom-14 z-20 flex justify-center p-4 sm:bottom-4">
-                <span className="liquid-glass-thin inline-flex items-center rounded-full px-3 py-1 text-xs text-amber-300">
-                  <span className="relative z-[1]">预览可用，但在线解码失败</span>
+                <span className="panel-quiet inline-flex items-center rounded-full px-3 py-1 text-xs text-amber-300">
+                  <span className="relative z-[1]">图层暂时无法读取</span>
                 </span>
               </div>
             )}
@@ -525,23 +522,23 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
           )}
 
           {allCaveats && (
-            <LiquidGlass variant="pane" className="p-4">
+            <div className="panel p-4">
               <div>
-                <h2 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-studio-100">
+                <h2 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-ink-100">
                   <span
                     aria-hidden="true"
                     className="h-3 w-0.5 rounded-full bg-gradient-to-b from-ember to-accent/30"
                   />
-                  关于在线合成
-                  <span className="rounded-full border border-studio-100/10 px-1.5 py-px text-[9px] font-normal tabular-nums text-studio-400">
+                  关于图层显示
+                  <span className="rounded-full border border-ink-100/10 px-1.5 py-px text-[9px] font-normal tabular-nums text-ink-400">
                     {caveats.length} 条
                   </span>
                 </h2>
                 {/* Engraved-into-glass hairline rather than a border: a hard 1px
                     rule under a label on a translucent pane looks like a table
                     cell edge. */}
-                <div aria-hidden="true" className="glass-divider mt-2.5" />
-                <ul className="mt-2.5 space-y-1.5 text-[11px] leading-relaxed text-studio-300">
+                <div aria-hidden="true" className="rule mt-2.5" />
+                <ul className="mt-2.5 space-y-1.5 text-[11px] leading-relaxed text-ink-300">
                   {caveats.map((caveat) => (
                     <li key={caveat} className="flex gap-2">
                       <span aria-hidden="true" className="mt-[7px] h-px w-2.5 shrink-0 bg-ice/45" />
@@ -550,7 +547,7 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                   ))}
                 </ul>
               </div>
-            </LiquidGlass>
+            </div>
           )}
         </section>
 

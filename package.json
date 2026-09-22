@@ -23,7 +23,8 @@
     "verify:workflows": "tsx scripts/verify-workflows.ts",
     "studio": "tsx scripts/studio/server.ts",
     "test:studio": "vitest run scripts/studio",
-    "verify:studio": "tsx scripts/studio/verify-studio.ts"
+    "verify:studio": "tsx scripts/studio/verify-studio.ts",
+    "verify:ui": "tsx scripts/ui-check.ts"
   },
   "dependencies": {
     "ag-psd": "31.0.2",

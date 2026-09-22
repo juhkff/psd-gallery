@@ -34,9 +34,7 @@ import { formatBytes, formatSize } from '../lib/format';
 import { GROUPS_PER_PAGE, planGalleryPage } from '../lib/gallery-page';
 import { workHash } from '../lib/route';
 import { buildTimelineEntries, computeStreakStats, groupEntriesByMonth, todayIso } from '../lib/timeline';
-import { useLiquidPointer } from '../lib/useLiquidPointer';
 import { useTimelineSpy } from '../lib/useTimelineSpy';
-import { LiquidGlass } from './LiquidGlass';
 import { TimelineRail } from './TimelineRail';
 
 export { GROUPS_PER_PAGE };
@@ -52,8 +50,8 @@ function Thumbnail({ work }: { work: WorkEntry }) {
   const { thumb, thumbWidth, thumbHeight } = work.preview;
   if (!thumb || failed) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-xs text-studio-400">
-        暂无预览
+      <div className="flex h-full w-full items-center justify-center text-[11px] text-ink-500">
+        无预览
       </div>
     );
   }
@@ -66,7 +64,7 @@ function Thumbnail({ work }: { work: WorkEntry }) {
       decoding="async"
       alt={`${work.name} 缩略图`}
       onError={() => setFailed(true)}
-      className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.02]"
+      className="h-full w-full object-contain"
     />
   );
 }
@@ -74,44 +72,29 @@ function Thumbnail({ work }: { work: WorkEntry }) {
 function WorkTile({ date, work, selected }: WorkTileProps) {
   const { thumbWidth, thumbHeight } = work.preview;
   return (
-    <LiquidGlass
-      as="a"
-      variant="thin"
-      interactive
+    <a
       data-testid="work-tile"
       href={workHash(date, work.name)}
       aria-current={selected ? 'true' : undefined}
-      className={`group flex flex-col transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-studio-950/70 ${
-        selected ? 'ring-1 ring-accent/70' : ''
+      className={`group flex flex-col rounded-lg transition-colors ${
+        selected ? 'bg-ink-850' : 'hover:bg-ink-900'
       }`}
     >
-      {/* The artwork sits in a recessed mat: the mat is darker than the frame and
-          its shadow falls inward, which is what makes the picture read as being
-          behind the glass rather than painted on it. */}
+      {/* The picture sits in a recessed well so it reads as being *in* the page
+          rather than pasted on it. */}
       <div
-        className="artwork-mat m-1.5 overflow-hidden rounded-[12px]"
+        className="well overflow-hidden"
         style={{ aspectRatio: `${thumbWidth} / ${thumbHeight}` }}
       >
-        <div className="checkerboard h-full w-full opacity-60">
-          <Thumbnail work={work} />
-        </div>
+        <Thumbnail work={work} />
       </div>
-      <div className="flex flex-col gap-1 px-3 pb-3 pt-1 text-left">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-sm font-medium text-studio-100">{work.name}.psd</span>
-          <span className="shrink-0 text-[11px] tabular-nums text-studio-300">{formatBytes(work.bytes)}</span>
-        </span>
-        <span className="text-[11px] text-studio-400">
-          {formatSize(work.width, work.height)} · {work.layerCount} 个图层
+      <div className="flex flex-col gap-0.5 px-0.5 pt-2.5">
+        <span className="truncate text-[13px] text-ink-200">{work.name}</span>
+        <span className="label">
+          {formatSize(work.width, work.height)} · {work.layerCount} 图层 · {formatBytes(work.bytes)}
         </span>
       </div>
-      {selected && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-accent/50"
-        />
-      )}
-    </LiquidGlass>
+    </a>
   );
 }
 
@@ -124,10 +107,6 @@ export interface GalleryProps {
 export function Gallery({ groups, selected = null }: GalleryProps) {
   const [visibleGroups, setVisibleGroups] = useState(GROUPS_PER_PAGE);
   const headingId = useId();
-
-  // One pointer listener for the whole gallery; it targets the nearest
-  // `.liquid-interactive` ancestor of whatever the pointer is over.
-  const pointer = useLiquidPointer<HTMLDivElement>();
 
   // Newest first; a deep link into an older date widens the page so the
   // selected tile is never paginated away. See lib/gallery-page.ts.
@@ -148,7 +127,7 @@ export function Gallery({ groups, selected = null }: GalleryProps) {
   const activeDate = useTimelineSpy(renderedDates);
 
   if (groups.length === 0) {
-    return <p className="text-sm text-studio-300">暂时没有可展示的作品。</p>;
+    return <p className="text-sm text-ink-300">还没有作品。</p>;
   }
 
   return (
@@ -166,7 +145,7 @@ export function Gallery({ groups, selected = null }: GalleryProps) {
         />
       </div>
 
-      <div ref={pointer.ref} onPointerMove={pointer.onPointerMove} aria-labelledby={headingId} className="flex min-w-0 flex-col gap-10">
+      <div aria-labelledby={headingId} className="flex min-w-0 flex-col gap-12">
         <h2 id={headingId} className="sr-only">
           按日期归档的作品
         </h2>
@@ -179,29 +158,16 @@ export function Gallery({ groups, selected = null }: GalleryProps) {
             // scroll-mt-* keeps the anchor from landing under the edge of the viewport
             className="reveal flex scroll-mt-24 flex-col gap-4"
           >
-            <div className="flex flex-col gap-2.5">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-                <span
-                  aria-hidden="true"
-                  className="h-1.5 w-1.5 shrink-0 translate-y-[-2px] rounded-full bg-accent shadow-[0_0_10px_rgba(201,162,39,0.75)]"
-                />
-                <h3
-                  data-date={group.date}
-                  className="font-display text-lg leading-none font-semibold tracking-wide text-studio-100"
-                >
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h3 data-date={group.date} className="text-[15px] font-medium text-ink-100">
                   {formatDateLabel(group.date)}
                 </h3>
-                <span className="rounded-full border border-studio-100/10 bg-studio-100/5 px-2 py-0.5 text-[10px] tabular-nums text-studio-300">
-                  {group.works.length} 件
-                </span>
-                <span className="ml-auto hidden text-[11px] tabular-nums tracking-[0.18em] text-studio-600 sm:inline">
-                  {group.date}
-                </span>
+                <span className="label">{group.works.length} 件</span>
               </div>
-              {/* Engraved hairline: fades in, brightens under the label, dies out. */}
-              <span aria-hidden="true" className="glass-divider w-full" />
+              <span aria-hidden="true" className="rule w-full" />
             </div>
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] items-start gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] items-start gap-x-5 gap-y-7 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
               {group.works.map((work) => (
                 // self-start keeps a landscape tile from being stretched to the
                 // height of a portrait neighbour in the same row.
@@ -218,20 +184,20 @@ export function Gallery({ groups, selected = null }: GalleryProps) {
         ))}
 
         {hasMore && (
-          <LiquidGlass variant="thin" className="flex flex-col items-center gap-2 px-6 py-5">
+          <div className="panel-quiet flex flex-col items-center gap-2 px-6 py-5">
             <button
               type="button"
               data-testid="load-more"
               onClick={() => setVisibleGroups((current) => current + GROUPS_PER_PAGE)}
-              className="liquid-interactive rounded-full px-6 py-2.5 text-sm text-studio-100 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14)] transition hover:text-accent-soft"
+              className="rounded-full px-6 py-2.5 text-sm text-ink-100 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14)] transition hover:text-accent-soft"
             >
-              <i aria-hidden="true" className="liquid-specular" />
+              
               显示更早的日期（还有 {hiddenCount} 天 · {hiddenWorks} 件）
             </button>
-            <p className="text-[11px] text-studio-400">
+            <p className="text-[11px] text-ink-400">
               已显示 {shown.length} / {totalGroups} 天，共 {totalWorks} 件作品
             </p>
-          </LiquidGlass>
+          </div>
         )}
       </div>
     </div>

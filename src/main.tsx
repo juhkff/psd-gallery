@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './ErrorBoundary';
-import { LiquidFilters } from './components/LiquidFilters';
 import './index.css';
 
 const container = document.getElementById('root');
@@ -18,8 +17,6 @@ document.documentElement.style.setProperty(
 
 createRoot(container).render(
   <StrictMode>
-    {/* The SVG filters must be in the document before any backdrop-filter: url() uses them. */}
-    <LiquidFilters />
     <ErrorBoundary>
       <App />
     </ErrorBoundary>

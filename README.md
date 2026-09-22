@@ -66,6 +66,7 @@ npm run dev         # 生成 manifest 并启动开发服务器 http://127.0.0.1:
 | `npm test:e2e` | 用真实 headless Chrome 跑端到端验收（需先 `npm run build`） |
 | `npm run verify:proxy` | 生成一张 8.3 MP 的临时 PSD，验证代理缩放路径后自动清理 |
 | `npm run verify:scale` | 用合成 manifest 验证「日期很多」时首屏仍然有界（分页生效） |
+| `npm run verify:ui` | 界面自检：装饰确已移除、面板仍有模糊、时间线点击可跳转、无技术术语 |
 | `npm run verify:workflows` | 校验 CI 触发规则：分支 push 不构建、版本 tag 才构建 |
 | `npm run bench:scale` | 生成 N 个临时 PSD，实测构建耗时 / 产物体积 / DOM 规模随作品数增长 |
 | `npm run typecheck` | 全项目类型检查 |

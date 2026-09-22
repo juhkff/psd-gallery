@@ -27,10 +27,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatElapsed, formatProgress, formatSize, stripTrailingPercent } from '../lib/format';
 import type { PsdStatus } from '../psd/usePsdWork';
-import { LiquidGlass } from './LiquidGlass';
 
 /** The two real phases the hook can be in: the worker sets `status` per phase. */
-const PHASES = ['下载', '解码'] as const;
+const PHASES = ['下载', '读取图层'] as const;
 
 export interface DecodeProgressProps {
   status: PsdStatus;
@@ -44,17 +43,9 @@ export interface DecodeProgressProps {
 }
 
 function MetaDot() {
-  return <span aria-hidden="true" className="h-0.5 w-0.5 rounded-full bg-studio-600" />;
+  return <span aria-hidden="true" className="h-0.5 w-0.5 rounded-full bg-ink-600" />;
 }
 
-function LocalIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M4.5 7V5.4a3.5 3.5 0 0 1 7 0V7" />
-      <rect x="3" y="7" width="10" height="6.2" rx="1.4" />
-    </svg>
-  );
-}
 
 type PhaseState = 'done' | 'current' | 'todo';
 
@@ -70,7 +61,7 @@ function PhaseMark({ state }: { state: PhaseState }) {
   return (
     <span
       aria-hidden="true"
-      className={`rounded-full ${state === 'current' ? 'h-1.5 w-1.5 animate-pulse bg-accent-soft' : 'h-1 w-1 bg-studio-600'}`}
+      className={`rounded-full ${state === 'current' ? 'h-1.5 w-1.5 animate-pulse bg-accent-soft' : 'h-1 w-1 bg-ink-600'}`}
     />
   );
 }
@@ -114,27 +105,23 @@ export function DecodeProgress({
   // ("正在下载 PSD… 34%") while the bar below is the worker's *overall*
   // progress; `stripTrailingPercent` drops the duplicate so exactly one
   // percentage is ever on screen - the one the bar and aria-valuenow report.
-  const labelText = stripTrailingPercent(progressLabel) || '正在解码 PSD…';
+  const labelText = stripTrailingPercent(progressLabel) || '正在读取图层…';
 
   return (
     // Raised above the floating zoom control on phones, level with it from `sm`.
     <div className="pointer-events-none absolute inset-x-0 bottom-14 z-20 flex justify-center p-3 sm:bottom-3 sm:p-4">
-      <LiquidGlass
-        variant="pane"
-        elevate
-        className="w-full max-w-sm animate-fade-up px-4 py-3"
-      >
+      <div className="panel w-full max-w-sm animate-fade-in px-4 py-3">
         <div className="flex flex-col">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <span aria-hidden="true" className="relative flex h-2 w-2 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-accent" />
+                <span className="absolute inline-flex h-full w-full rounded-full bg-accent" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
               </span>
-              <span className="truncate text-xs text-studio-100">{labelText}</span>
+              <span className="truncate text-xs text-ink-100">{labelText}</span>
             </div>
             {hasFraction && (
-              <span className="font-display text-xl leading-none tabular-nums text-gradient-gold">
+              <span className="font-display text-xl leading-none tabular-nums">
                 {formatProgress(progress)}
               </span>
             )}
@@ -145,19 +132,19 @@ export function DecodeProgress({
               head - a soft halo, a hard core, and a short trail behind it. */}
           <div
             role="progressbar"
-            aria-label="PSD 解码进度"
+            aria-label="读取进度"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={hasFraction ? Math.round(progress * 100) : undefined}
-            aria-valuetext={hasFraction ? undefined : '正在解码，进度未知'}
-            className="relative mt-3 h-2.5 overflow-hidden rounded-full bg-studio-950/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-studio-100/10"
+            aria-valuetext={hasFraction ? undefined : '进度未知'}
+            className="relative mt-3 h-2.5 overflow-hidden rounded-full bg-ink-950/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-ink-100/10"
           >
             {/* Tick ruler: an honest density cue from the real layer count, kept
                 at low contrast so it never competes with the travelling light -
                 at higher opacity it reads as a barcode instead of a fibre. */}
             <span aria-hidden="true" className="absolute inset-0 flex items-stretch justify-between px-px opacity-45">
               {Array.from({ length: tickCount }, (_, index) => (
-                <span key={index} className="w-px bg-studio-100/[0.16]" />
+                <span key={index} className="w-px bg-ink-100/[0.16]" />
               ))}
             </span>
             {hasFraction ? (
@@ -170,9 +157,9 @@ export function DecodeProgress({
                   <span className="shimmer-line absolute inset-0 opacity-70" />
                 </span>
                 <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2">
-                  <span className="absolute right-0 top-1/2 h-1 w-10 -translate-y-1/2 bg-gradient-to-l from-studio-100/70 to-transparent blur-[1px]" />
-                  <span className="absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-studio-100/60 blur-[3px]" />
-                  <span className="absolute right-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-studio-100 shadow-[0_0_10px_3px_rgba(236,236,242,0.6)]" />
+                  <span className="absolute right-0 top-1/2 h-1 w-10 -translate-y-1/2 bg-gradient-to-l from-ink-100/70 to-transparent blur-[1px]" />
+                  <span className="absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-ink-100/60 blur-[3px]" />
+                  <span className="absolute right-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-ink-100 shadow-[0_0_10px_3px_rgba(236,236,242,0.6)]" />
                 </span>
               </span>
             ) : (
@@ -202,7 +189,7 @@ export function DecodeProgress({
                           ? 'border-accent/45 bg-accent/20 text-accent-soft'
                           : state === 'current'
                             ? 'border-accent/60 bg-accent/15 text-accent-soft shadow-[0_0_10px_-1px_rgba(201,162,39,0.85)]'
-                            : 'border-studio-100/[0.14] bg-studio-950/40 text-studio-600'
+                            : 'border-ink-100/[0.14] bg-ink-950/40 text-ink-600'
                       }`}
                     >
                       <PhaseMark state={state} />
@@ -210,10 +197,10 @@ export function DecodeProgress({
                     <span
                       className={
                         state === 'current'
-                          ? 'font-medium text-studio-100'
+                          ? 'font-medium text-ink-100'
                           : state === 'done'
-                            ? 'text-studio-300'
-                            : 'text-studio-400'
+                            ? 'text-ink-300'
+                            : 'text-ink-400'
                       }
                     >
                       {label}
@@ -222,7 +209,7 @@ export function DecodeProgress({
                   {index < PHASES.length - 1 && (
                     <span
                       aria-hidden="true"
-                      className={`mx-1.5 h-px w-6 ${state === 'done' ? 'bg-accent/45' : 'bg-studio-100/[0.14]'}`}
+                      className={`mx-1.5 h-px w-6 ${state === 'done' ? 'bg-accent/45' : 'bg-ink-100/[0.14]'}`}
                     />
                   )}
                 </li>
@@ -230,17 +217,12 @@ export function DecodeProgress({
             })}
           </ol>
 
-          <div aria-hidden="true" className="glass-divider mt-2.5" />
+          <div aria-hidden="true" className="rule mt-2.5" />
 
           {/* The card can sit over a bright print, and the artwork shows through
               the glass tint: the meta line is one step brighter than the usual
               micro-label so it stays readable on the lightest backdrop. */}
-          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-studio-300">
-            <span className="inline-flex items-center gap-1">
-              <LocalIcon />
-              本地浏览器解码
-            </span>
-            <MetaDot />
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-ink-300">
             <span className="tabular-nums">{formatElapsed(elapsedMs)}</span>
             {layerCount > 0 && (
               <>
@@ -256,7 +238,7 @@ export function DecodeProgress({
             )}
           </p>
         </div>
-      </LiquidGlass>
+      </div>
     </div>
   );
 }
