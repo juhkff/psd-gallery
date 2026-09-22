@@ -63,9 +63,9 @@ function scrollToTimelineDate(date: string): void {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-studio-700/80 bg-studio-900/50 px-2 py-1.5">
-      <dt className="text-[10px] uppercase tracking-wider text-studio-400">{label}</dt>
-      <dd className="text-sm font-medium text-studio-100">{value}</dd>
+    <div className="liquid-glass-thin px-2.5 py-2">
+      <dt className="text-[10px] tracking-wider text-studio-400">{label}</dt>
+      <dd className="mt-0.5 font-display text-base leading-none text-studio-100 tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -152,9 +152,15 @@ export function TimelineRail({
 
       {/* The rail itself. Hidden on small screens; the chips stay. */}
       <div className="reveal relative hidden lg:block">
+        {/* Two layers: a blurred glow so the rail reads as light running through
+            the glass, and a bright hairline on top for definition. */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute bottom-3 left-[4px] top-3 w-px bg-gradient-to-b from-accent-soft/70 via-ember/50 to-transparent"
+          className="pointer-events-none absolute bottom-3 left-[3px] top-3 w-[3px] rounded-full bg-gradient-to-b from-accent-soft/50 via-ember/35 to-transparent blur-[3px]"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-3 left-[4px] top-3 w-px bg-gradient-to-b from-accent-soft via-ember/70 to-transparent"
         />
         <ol className="flex flex-col gap-1.5">
           {entries.map((entry, index) => {
@@ -177,16 +183,18 @@ export function TimelineRail({
                   href={`#date-${entry.date}`}
                   data-timeline-node={entry.date}
                   aria-current={isActive ? 'true' : undefined}
-                  className={`group relative flex items-start gap-3 rounded-lg py-1.5 pl-[18px] pr-2 transition focus-visible:outline-none ${
-                    isActive ? 'bg-accent/10' : 'hover:bg-studio-800/60'
+                  className={`group relative flex items-start gap-3 rounded-xl py-1.5 pl-[18px] pr-2 transition focus-visible:outline-none ${
+                    isActive
+                      ? 'bg-accent/12 shadow-[inset_0_1px_0_0_rgba(236,236,242,0.14),0_6px_18px_-12px_rgba(0,0,0,0.9)]'
+                      : 'hover:bg-studio-800/60'
                   }`}
                 >
                   <span
                     aria-hidden="true"
-                    className={`absolute left-[1px] top-[9px] h-[7px] w-[7px] rounded-full border transition ${
+                    className={`absolute left-px top-[9px] h-[7px] w-[7px] rounded-full border transition ${
                       isActive
-                        ? 'animate-pulse-ring border-accent bg-accent-soft'
-                        : 'border-studio-600 bg-studio-900 group-hover:border-accent/70'
+                        ? 'animate-pulse-ring border-accent bg-accent-soft shadow-[0_0_12px_rgba(230,198,92,0.85)]'
+                        : 'border-studio-600 bg-studio-900 shadow-[inset_0_1px_0_0_rgba(236,236,242,0.18)] group-hover:border-accent/70 group-hover:shadow-[0_0_8px_rgba(201,162,39,0.5)]'
                     }`}
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
