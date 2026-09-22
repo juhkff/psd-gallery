@@ -89,12 +89,42 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // SAFETY PREFLIGHT. Cleanup resets the repo to origin/main to remove this
+  // test's own commit. If there is uncommitted tracked work, that reset would
+  // silently destroy it - so refuse to start instead. Untracked files survive a
+  // reset but are listed too, so the message is honest about what is at risk.
+  const dirty = git(['status', '--porcelain']).stdout.trim();
+  if (dirty !== '' && !process.argv.includes('--allow-dirty')) {
+    console.error(
+      [
+        '',
+        '  REFUSING TO RUN: the working tree has uncommitted changes and cleanup',
+        '  ends with `git reset --hard origin/main`, which would delete them.',
+        '',
+        ...dirty.split('\n').slice(0, 20).map((line) => `    ${line}`),
+        dirty.split('\n').length > 20 ? `    … and ${dirty.split('\n').length - 20} more` : '',
+        '',
+        '  Commit or stash first, then re-run. Pass --allow-dirty to override',
+        '  (only if you are certain the tracked changes may be discarded).',
+        '',
+      ].filter((line) => line !== undefined).join('\n'),
+    );
+    process.exit(3);
+  }
+
   // 1. throwaway remote so 发布 cannot touch GitHub
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-bare-'));
   git(['init', '--bare', '--quiet', bare]);
   const originalRemote = git(['remote', 'get-url', 'origin']).stdout.trim();
   const headBefore = git(['rev-parse', 'HEAD']).stdout.trim();
   git(['remote', 'set-url', 'origin', bare]);
+  // Belt-and-braces: the watchdog and any hard exit skip the `finally` block,
+  // and a verifier killed that way once left the real repo pointing at a
+  // now-deleted /tmp bare repo. This handler runs even for process.exit().
+  const restoreOrigin = () => { try { git(['remote', 'set-url', 'origin', originalRemote]); } catch { /* best effort */ } };
+  process.on('exit', restoreOrigin);
+  process.on('SIGINT', () => { restoreOrigin(); process.exit(130); });
+  process.on('SIGTERM', () => { restoreOrigin(); process.exit(143); });
   console.log(`  (publish target: temp bare repo ${bare}, origin restored afterwards)\n`);
 
   const watchdog = armWatchdog();

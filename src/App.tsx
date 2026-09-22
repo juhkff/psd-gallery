@@ -5,10 +5,17 @@
  *  - works are linkable/bookmarkable,
  *  - the browser back/forward buttons work without a router,
  *  - the gallery tile can stay a plain `<a href="#/...">`.
+ *
+ * The chrome is liquid glass (see src/index.css). One structural rule follows
+ * from that: `backdrop-filter` samples what is behind an element, and it stops
+ * working the moment an ancestor creates a containing block. So the shell keeps
+ * its wrappers free of `overflow`, `filter`, `transform` and `opacity < 1`, and
+ * clips with border-radius instead.
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Gallery } from './components/Gallery';
+import { LiquidGlass } from './components/LiquidGlass';
 import { UnbuiltList } from './components/UnbuiltList';
 import { WorkViewer } from './components/WorkViewer';
 import { formatBytes } from './lib/format';
@@ -56,31 +63,37 @@ function heroStats(groups: readonly { date: string; works: readonly { bytes: num
   };
 }
 
-function Stat({
-  value,
-  label,
-  hint,
-}: {
+/**
+ * One headline figure. Each sits on its own pane and floats on a staggered delay
+ * so the row reads as separate pieces of glass rather than one strip.
+ */
+function Stat({ value, label, hint, delay = 0 }: {
   value: string;
   label: string;
   hint?: string;
+  delay?: number;
 }) {
   return (
-    <div className="glass flex min-w-[7.5rem] flex-col gap-0.5 rounded-2xl px-4 py-3">
+    <LiquidGlass
+      variant="thin"
+      elevate
+      className="animate-float min-w-[7.5rem] px-4 py-3"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <span className="font-display text-2xl leading-none text-gradient-gold">{value}</span>
-      <span className="text-[11px] tracking-wide text-studio-300">{label}</span>
-      {hint && <span className="text-[10px] text-studio-400">{hint}</span>}
-    </div>
+      <span className="mt-1 block text-[11px] tracking-wide text-studio-300">{label}</span>
+      {hint && <span className="block text-[10px] text-studio-400">{hint}</span>}
+    </LiquidGlass>
   );
 }
 
 function StateCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="glass mx-auto flex max-w-xl flex-col items-start gap-3 rounded-2xl p-6">
+    <LiquidGlass variant="pane" elevate className="mx-auto flex max-w-xl flex-col items-start gap-3 p-6">
       <h2 className="font-display text-base font-semibold">{title}</h2>
       <p className="text-sm leading-relaxed text-studio-300">{children}</p>
       {action}
-    </div>
+    </LiquidGlass>
   );
 }
 
@@ -89,19 +102,16 @@ function GallerySkeleton() {
     <div className="flex flex-col gap-10" aria-hidden="true">
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-4">
-          <div className="flex items-end gap-3 border-b border-studio-700 pb-2">
-            <div className="h-5 w-40 animate-pulse rounded bg-studio-800" />
-            <div className="h-3 w-16 animate-pulse rounded bg-studio-800" />
+          <div className="flex items-end gap-3 pb-2">
+            <div className="h-5 w-40 animate-pulse rounded-full bg-studio-800" />
+            <div className="h-3 w-16 animate-pulse rounded-full bg-studio-800" />
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
-              <div
-                key={index}
-                className="flex flex-col gap-2 overflow-hidden rounded-2xl border border-studio-700 bg-studio-900/50 p-3"
-              >
-                <div className="aspect-[3/2] w-full animate-pulse rounded-xl bg-studio-800" />
-                <div className="h-3 w-1/2 animate-pulse rounded bg-studio-800" />
-              </div>
+              <LiquidGlass key={index} variant="thin" className="p-3">
+                <div className="checkerboard aspect-[3/2] w-full animate-pulse rounded-xl" />
+                <div className="mt-2 h-3 w-1/2 animate-pulse rounded-full bg-studio-800" />
+              </LiquidGlass>
             ))}
           </div>
         </div>
@@ -145,22 +155,54 @@ export function App() {
 
   return (
     <div className="relative min-h-screen w-full">
-      {/* Ambient backdrop: fixed, pointer-transparent, never intercepts clicks. */}
+      {/* Ambient light. Fixed and pointer-transparent, so it never eats a click
+          and never moves with scroll (which would make the glass look liquid
+          rather than like a pane of it). */}
       <div className="studio-backdrop pointer-events-none fixed inset-0 -z-10" aria-hidden="true" />
       <div
-        className="grain-overlay pointer-events-none fixed inset-0 -z-10 opacity-[0.05] mix-blend-overlay"
+        className="grain-overlay pointer-events-none fixed inset-0 -z-10 opacity-[0.045] mix-blend-overlay"
+        aria-hidden="true"
+      />
+      {/* A soft aurora band behind the content. This is what makes the glass
+          read as glass: a translucent pane is only convincing when there is
+          something coloured behind it to bend. Kept well below text contrast. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-[18vh] -z-10 h-[46vh] opacity-[0.5] blur-3xl"
+        style={{
+          background:
+            'linear-gradient(100deg, color-mix(in oklab, var(--color-ion) 42%, transparent), color-mix(in oklab, var(--color-ice) 26%, transparent) 45%, color-mix(in oklab, var(--color-ember) 34%, transparent))',
+          maskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
+        }}
+      />
+      {/* A slow drifting bloom, so the glass always has something moving behind it. */}
+      <div
+        className="animate-drift pointer-events-none fixed -z-10 h-[38rem] w-[38rem] rounded-full opacity-40 blur-3xl"
+        style={{
+          top: '-12rem',
+          left: '-10rem',
+          background:
+            'radial-gradient(circle, color-mix(in oklab, var(--color-ion) 34%, transparent), transparent 66%)',
+        }}
         aria-hidden="true"
       />
 
       <div className="mx-auto flex min-h-screen w-full max-w-[1560px] flex-col px-4 sm:px-6">
-        {/* Deliberately NOT sticky: the timeline rail is the only sticky layer
-            on the page, so its month scrubber can pin to the viewport top
-            without stacking underneath a second sticky element. */}
+        {/* Deliberately NOT sticky: the timeline rail is the only sticky layer on
+            the page, so its month scrubber can pin to the viewport top without
+            having to stack under a second sticky element. */}
         <header className="mb-2">
-          <div className="glass mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-2.5">
+          <LiquidGlass
+            variant="pane"
+            refract
+            elevate
+            as="div"
+            className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-3"
+          >
             <a href="#/" className="group flex items-center gap-2.5">
               <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-accent/60 animate-pulse-ring" />
+                <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-accent/60" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
               </span>
               <span className="font-display text-sm font-semibold tracking-wide">绘画练习图库</span>
@@ -177,7 +219,7 @@ export function App() {
                 <span className="hidden sm:inline">{formatBytes(stats.bytes)}</span>
               </span>
             )}
-          </div>
+          </LiquidGlass>
         </header>
 
         <main className="flex min-h-0 flex-1 flex-col pb-10">
@@ -226,9 +268,10 @@ export function App() {
               <Gallery groups={manifest.groups} selected={null} />
               <UnbuiltList groups={unbuilt} />
             </div>
-          )}        </main>
+          )}
+        </main>
 
-        <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-studio-700/70 py-4 text-[11px] text-studio-400">
+        <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 py-4 text-[11px] text-studio-400">
           <span>PSD 解码完全在本地浏览器中进行（Web Worker + IndexedDB 缓存），不会上传任何文件。</span>
           {stats.latest && <span className="ml-auto">最近更新 {stats.latest}</span>}
         </footer>
@@ -240,30 +283,47 @@ export function App() {
 /** Big editorial opening: title, one-line intent, and the headline numbers. */
 function Hero({ stats }: { stats: HeroStats }) {
   return (
-    <section className="reveal relative overflow-hidden rounded-3xl border border-studio-700/80 px-5 py-9 sm:px-9 sm:py-12">
-      <div className="studio-backdrop absolute inset-0 -z-10 opacity-90" aria-hidden="true" />
+    <LiquidGlass
+      variant="pane"
+      elevate
+      as="section"
+      className="reveal relative mt-4 px-5 py-9 sm:px-9 sm:py-12"
+    >
+      {/* Inner refraction fringe: a bright arc at the top edge and a cool one at
+          the bottom, which is how a thick sheet of glass catches light. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-6 -top-px h-px bg-gradient-to-r from-transparent via-studio-100/60 to-transparent"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-10 -bottom-px h-px bg-gradient-to-r from-transparent via-ice/35 to-transparent"
+      />
+
       <p className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-accent/90">
         <span className="inline-block h-px w-8 bg-accent/60" />
         Drawing Practice Archive
       </p>
       <h1 className="font-display text-4xl leading-tight tracking-tight sm:text-6xl">
-        每日练习<span className="text-gradient-gold">·</span>时间线
+        每日练习<span className="text-gradient-gold">·</span>
+        <span className="text-gradient-ice">时间线</span>
       </h1>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-studio-300 sm:text-base">
         按日期归档的绘画练习与 PSD 工程文件。在浏览器里逐层查看图层、随时隐藏或显示，
         原始 PSD 一键下载 —— 解析全部在本机完成。
       </p>
       <div className="mt-7 flex flex-wrap gap-3">
-        <Stat value={String(stats.works)} label="件作品" hint="已归档" />
-        <Stat value={String(stats.activeDays)} label="个练习日" hint="有产出的天数" />
-        <Stat value={String(stats.spanDays)} label="天跨度" hint="首件至今" />
+        <Stat value={String(stats.works)} label="件作品" hint="已归档" delay={0} />
+        <Stat value={String(stats.activeDays)} label="个练习日" hint="有产出的天数" delay={420} />
+        <Stat value={String(stats.spanDays)} label="天跨度" hint="首件至今" delay={840} />
         <Stat
           value={stats.bytes >= 1024 ** 3 ? `${(stats.bytes / 1024 ** 3).toFixed(1)}G` : `${(stats.bytes / 1024 ** 2).toFixed(0)}M`}
           label="源文件总量"
           hint="PSD 字节数"
+          delay={1260}
         />
       </div>
-    </section>
+    </LiquidGlass>
   );
 }
 

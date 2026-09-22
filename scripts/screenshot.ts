@@ -66,7 +66,10 @@ try {
       '.reveal-ready .reveal{opacity:1 !important;transform:none !important;transition:none !important}';
     document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
   });
-  await page.goto(`http://127.0.0.1:${PORT}/${route}`, { waitUntil: 'networkidle2', timeout: 60000 });
+  // `route` may carry a query string (e.g. `/?liquid=1`), so only insert the
+  // separator when it does not already start with one.
+  const pageUrl = `http://127.0.0.1:${PORT}/${route.replace(/^\//, '')}`;
+  await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
   // let reveals and the crossfade settle
   await new Promise((r) => setTimeout(r, 1200));
   const target = path.join(ROOT, out);

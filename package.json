@@ -20,7 +20,10 @@
     "verify:proxy": "tsx scripts/verify-proxy.ts",
     "verify:scale": "tsx scripts/verify-scale-ui.ts",
     "bench:scale": "tsx scripts/bench-scale.ts",
-    "verify:workflows": "tsx scripts/verify-workflows.ts"
+    "verify:workflows": "tsx scripts/verify-workflows.ts",
+    "studio": "tsx scripts/studio/server.ts",
+    "test:studio": "vitest run scripts/studio",
+    "verify:studio": "tsx scripts/studio/verify-studio.ts"
   },
   "dependencies": {
     "ag-psd": "31.0.2",

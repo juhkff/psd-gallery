@@ -421,6 +421,42 @@ const server = http.createServer((request, response) => {
         return;
       }
 
+      /*
+       * Serve the generated previews.
+       *
+       * The manifest stores root-absolute URLs (/generated/works/...), which the
+       * deployed site resolves against its own root. The studio is a different
+       * origin - it only had API routes - so the archived-work rows in page.html
+       * were requesting thumbnails that 404'd and rendered as broken images.
+       * Only read-only previews are exposed, and the path is resolved and
+       * confined by abs(), so this cannot escape public/.
+       */
+      if (request.method === 'GET' && route.startsWith('/generated/')) {
+        try {
+          const file = abs(path.join('public', route.slice(1)));
+          if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+            json(response, 404, { error: 'not found' });
+            return;
+          }
+          const extension = path.extname(file);
+          const type =
+            extension === '.webp' ? 'image/webp'
+            : extension === '.png' ? 'image/png'
+            : extension === '.json' ? 'application/json; charset=utf-8'
+            : 'application/octet-stream';
+          const bytes = fs.readFileSync(file);
+          response.writeHead(200, {
+            'content-type': type,
+            'content-length': bytes.length,
+            'cache-control': 'no-store',
+          });
+          response.end(bytes);
+        } catch {
+          json(response, 404, { error: 'not found' });
+        }
+        return;
+      }
+
       if (request.method === 'POST' && route === '/api/upload') {
         if (!authorised(request)) return json(response, 403, { error: 'token 无效' });
         const result = await handleUpload(request);

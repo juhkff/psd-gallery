@@ -12,17 +12,35 @@
  * sized in CSS pixels from the measured stage (fit) or from the document's own
  * pixels (100%), so a 2480x3508 A4 @300dpi scan can be inspected at 1:1 and
  * panned. Zooming only touches layout/transform; decode stays in the worker.
+ *
+ * LIQUID GLASS
+ * The whole stage is one `liquid-glass` sheet (LiquidGlass renders the moving
+ * sheen layer over it), the transparency field sits on `checkerboard`, and the
+ * artwork gets the glass treatment it needs to stay inspectable: a soft
+ * vignette plus a faint diagonal reflection streak, never a full-area blur that
+ * would make 1:1 inspection impossible. Everything that floats *over* the
+ * artwork (the live/preview badge, the zoom cluster, the decode card) is real
+ * glass, so its backdrop is the artwork itself - which is where the blur is
+ * actually provable in a screenshot.
+ *
+ * BACKDROP-FILTER CONTRACT (verified in this Chrome with .bench-output/bf-probe):
+ * `filter`, `opacity < 1` on an ancestor kill the backdrop sampling; `overflow`
+ * and `transform` ancestors do not. Nothing here puts either of the two fatal
+ * properties on an ancestor of a glass surface, and the stage clips with
+ * `border-radius`, never `overflow: hidden`.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { WorkEntry } from '../../shared/manifest';
 import { formatDateLabel } from '../../shared/paths';
 import { formatBytes, formatMegapixels, formatScale, formatSize } from '../lib/format';
+import { useLiquidPointer } from '../lib/useLiquidPointer';
 import { forceProxyFromHash } from '../lib/route';
 import { collectCaveats } from '../psd/layer-info';
 import { usePsdWork } from '../psd/usePsdWork';
 import { DecodeProgress } from './DecodeProgress';
 import { LayerPanel } from './LayerPanel';
+import { LiquidGlass } from './LiquidGlass';
 import { Toolbar } from './Toolbar';
 
 /** Absolute zoom bounds, in CSS pixels per document pixel. */
@@ -42,10 +60,11 @@ export interface WorkViewerProps {
   onClose: () => void;
 }
 
+/** A metadata chip: a tiny glass pill, never a full pane. */
 function MetaChip({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-full border border-studio-700/70 bg-studio-900/60 px-2 py-0.5 text-[11px] tabular-nums text-studio-300">
-      {children}
+    <span className="liquid-glass-thin inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] tabular-nums text-studio-300">
+      <span className="relative z-[1]">{children}</span>
     </span>
   );
 }
@@ -71,7 +90,9 @@ function ZoomButton({
       aria-label={label}
       title={title ?? label}
       className={`rounded-full px-2 py-1 text-[11px] leading-none transition ${
-        active ? 'bg-accent/20 text-accent-soft' : 'text-studio-300 hover:bg-studio-700/70 hover:text-studio-100'
+        active
+          ? 'bg-accent/20 text-accent-soft shadow-[inset_0_1px_0_rgba(236,236,242,0.18)] ring-1 ring-inset ring-accent/40'
+          : 'text-studio-300 hover:bg-studio-100/10 hover:text-studio-100'
       }`}
     >
       {children}
@@ -91,6 +112,12 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
   const [stage, setStage] = useState({ width: 0, height: 0 });
   const [zoomMode, setZoomMode] = useState<ZoomMode>('fit');
   const [customScale, setCustomScale] = useState(1);
+
+  // One pointer tracker for the whole viewer: it resolves the nearest
+  // `.liquid-interactive` ancestor of the hovered node, so a single listener
+  // drives every specular highlight on this surface (badge, zoom cluster, ...)
+  // without a React re-render per pointer move.
+  const { ref: viewerRef, onPointerMove } = useLiquidPointer<HTMLDivElement>();
 
   // Drawing one bitmap is a sub-millisecond main-thread operation; decoding
   // never happens here.
@@ -216,17 +243,17 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
   const allCaveats = caveats.length > 0;
 
   return (
-    <div className="flex min-h-0 flex-col gap-4">
+    <div ref={viewerRef} onPointerMove={onPointerMove} className="flex min-h-0 flex-col gap-4">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <button
             type="button"
             onClick={onClose}
-            className="group inline-flex items-center gap-1.5 rounded-full border border-studio-700/80 bg-studio-900/50 px-2.5 py-1 text-[11px] text-studio-300 transition hover:border-accent/60 hover:text-accent"
+            className="liquid-glass-thin liquid-interactive group inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-studio-300 transition hover:text-accent"
           >
             <svg
               viewBox="0 0 16 16"
-              className="h-3 w-3 transition-transform duration-300 group-hover:-translate-x-0.5"
+              className="relative z-[1] h-3 w-3 transition-transform duration-300 group-hover:-translate-x-0.5"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.6"
@@ -235,7 +262,8 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
               <path d="M9.5 3.5 5 8l4.5 4.5" />
               <path d="M5.5 8H13" />
             </svg>
-            返回图库
+            <span className="relative z-[1]">返回图库</span>
+            <i aria-hidden="true" className="liquid-specular" />
           </button>
 
           <h1 className="mt-2 flex min-w-0 items-baseline gap-2 text-xl font-semibold sm:text-2xl">
@@ -254,96 +282,129 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
           </div>
         </div>
 
+        {/* The ONE primary CTA on this page: gold fill + the rotating rim
+            highlight. Nothing else on the page may use `liquid-rim`.
+            `overflow-hidden` is load-bearing: `liquid-rim` animates
+            `transform: rotate()` on its ::before, which rotates that box, so on
+            a wide button the masked ring swings well outside the button unless
+            the button clips to its own rounded box. It is safe here - no glass
+            surface is a descendant of the CTA. */}
         <a
           data-testid="download-psd"
           href={work.psd}
           download={`${date}-${work.name}.psd`}
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-b from-accent-soft to-accent px-4 py-2.5 text-sm font-semibold text-studio-950 shadow-[0_14px_36px_-14px_rgba(201,162,39,0.85)] transition hover:brightness-[1.08] active:scale-[0.98]"
+          className="liquid-cta liquid-rim inline-flex shrink-0 items-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:brightness-[1.08] active:scale-[0.98]"
         >
-          <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-            <path d="M8 2.5v7.2" />
-            <path d="M5.2 7.2 8 10l2.8-2.8" />
-            <path d="M3 12.5h10" />
-          </svg>
-          下载 PSD
-          <span className="rounded-md bg-studio-950/15 px-1.5 py-px text-[11px] font-medium tabular-nums">
-            {formatBytes(work.bytes)}
+          <span className="relative z-[1] inline-flex items-center gap-2">
+            <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+              <path d="M8 2.5v7.2" />
+              <path d="M5.2 7.2 8 10l2.8-2.8" />
+              <path d="M3 12.5h10" />
+            </svg>
+            下载 PSD
+            <span className="rounded-md bg-studio-950/15 px-1.5 py-px text-[11px] font-medium tabular-nums">
+              {formatBytes(work.bytes)}
+            </span>
           </span>
+          <i aria-hidden="true" className="liquid-sheen" />
         </a>
       </header>
 
       <div className="flex min-h-0 flex-col gap-4 lg:flex-row">
         <section className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="relative">
-            <div
-              ref={stageRef}
-              tabIndex={0}
-              role="region"
-              aria-label="作品画布：可缩放、可滚动"
-              title="双击在适应窗口与 100% 之间切换 · Ctrl/⌘ + 滚轮缩放 · 焦点上用 +/-/0/1 键"
-              onDoubleClick={toggleFitAndActual}
-              onKeyDown={onStageKeyDown}
-              className="studio-backdrop relative overflow-auto overscroll-contain rounded-2xl border border-studio-700/80 bg-studio-950/60 shadow-[0_36px_90px_-50px_rgba(0,0,0,1)]"
-              style={{ height: 'clamp(20rem, 62vh, 48rem)' }}
-            >
-              <div className="flex min-h-full min-w-full p-2">
-                <div
-                  className="checkerboard relative m-auto shrink-0 overflow-hidden rounded-lg ring-1 ring-studio-100/10"
-                  style={surfaceStyle}
-                >
-                  {preview.display && (
-                    <img
-                      src={preview.display}
-                      width={preview.displayWidth}
-                      height={preview.displayHeight}
-                      alt=""
-                      aria-hidden="true"
-                      decoding="async"
+            {/* The sheet of glass the artwork sits behind. Everything that must
+                be sharp lives inside the scroll container; the pane, the sheen
+                and the floating chrome are outside it. `refract` is the thick
+                glass variant and is only allowed on a large, mostly static
+                surface - this frame is exactly that (the scroller is a child). */}
+            <LiquidGlass variant="pane" refract className="p-2">
+              <div
+                ref={stageRef}
+                tabIndex={0}
+                role="region"
+                aria-label="作品画布：可缩放、可滚动"
+                title="双击在适应窗口与 100% 之间切换 · Ctrl/⌘ + 滚轮缩放 · 焦点上用 +/-/0/1 键"
+                onDoubleClick={toggleFitAndActual}
+                onKeyDown={onStageKeyDown}
+                style={{ height: 'clamp(20rem, 62vh, 48rem)' }}
+                className="relative overflow-auto overscroll-contain rounded-[14px] border border-studio-100/10 bg-studio-950/70 ring-1 ring-inset ring-studio-100/[0.14] shadow-[inset_0_2px_18px_-6px_rgba(0,0,0,0.9)]"
+              >
+                <div className="flex min-h-full min-w-full p-3">
+                  <div
+                    className="checkerboard relative m-auto shrink-0 rounded-lg ring-1 ring-studio-100/10"
+                    style={surfaceStyle}
+                  >
+                    {preview.display && (
+                      <img
+                        src={preview.display}
+                        width={preview.displayWidth}
+                        height={preview.displayHeight}
+                        alt=""
+                        aria-hidden="true"
+                        decoding="async"
+                        className={`absolute inset-0 h-full w-full object-contain transition duration-700 ease-out ${
+                          frame ? 'scale-[1.025] opacity-0' : 'scale-100 opacity-100'
+                        }`}
+                      />
+                    )}
+                    <canvas
+                      data-testid="work-canvas"
+                      ref={canvasRef}
                       className={`absolute inset-0 h-full w-full object-contain transition duration-700 ease-out ${
-                        frame ? 'scale-[1.025] opacity-0' : 'scale-100 opacity-100'
+                        frame ? 'scale-100 opacity-100' : 'scale-[1.035] opacity-0'
                       }`}
                     />
-                  )}
-                  <canvas
-                    data-testid="work-canvas"
-                    ref={canvasRef}
-                    className={`absolute inset-0 h-full w-full object-contain transition duration-700 ease-out ${
-                      frame ? 'scale-100 opacity-100' : 'scale-[1.035] opacity-0'
-                    }`}
-                  />
-                  {/* A designed edge for the transparency surface: hairline +
-                      inner shade, never over the artwork's own pixels centre. */}
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-lg shadow-[inset_0_0_0_1px_rgba(236,236,242,0.07),inset_0_0_70px_rgba(0,0,0,0.35)]"
-                  />
+                    {/* Glass-over-artwork, the two parts that do not cost the
+                        1:1 view anything: a soft vignette for depth, and a faint
+                        diagonal reflection streak across the top of the image
+                        area. Both are pointer-transparent and purely decorative. */}
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-lg shadow-[inset_0_0_0_1px_rgba(236,236,242,0.08),inset_0_0_90px_rgba(0,0,0,0.45)]"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-lg bg-[linear-gradient(112deg,rgba(236,236,242,0.16)_0%,rgba(236,236,242,0.05)_20%,transparent_40%)]"
+                    />
+                  </div>
                 </div>
+              </div>
+            </LiquidGlass>
+
+            {/* Live/preview state, floating over the artwork: real glass, so its
+                backdrop is the canvas itself. */}
+            <div className="pointer-events-none absolute left-3 top-3 z-10">
+              <div className="liquid-glass-thin liquid-elevate liquid-interactive pointer-events-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] text-studio-300">
+                <span
+                  aria-hidden="true"
+                  className={`relative z-[1] h-1.5 w-1.5 rounded-full ${
+                    frame ? 'bg-accent shadow-[0_0_8px_rgba(201,162,39,0.8)]' : 'bg-studio-400'
+                  }`}
+                />
+                <span className="relative z-[1]">{frame ? '在线合成' : '预览图'}</span>
+                <i aria-hidden="true" className="liquid-specular" />
               </div>
             </div>
 
-            <span className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-studio-600/70 bg-studio-950/70 px-2 py-0.5 text-[10px] text-studio-300 backdrop-blur">
-              <span
-                aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${frame ? 'bg-accent' : 'bg-studio-400'}`}
-              />
-              {frame ? '在线合成' : '预览图'}
-            </span>
-
-            <div className="glass absolute bottom-3 right-3 z-30 flex items-center gap-1 rounded-full p-1">
-              <ZoomButton active={zoomMode === 'fit'} onClick={fitToWindow} label="适应窗口" title="适应窗口（快捷键 0）">
-                适应窗口
-              </ZoomButton>
-              <ZoomButton active={zoomMode === 'actual'} onClick={actualSize} label="实际像素 100%" title="实际像素 100%（快捷键 1）">
-                100%
-              </ZoomButton>
-              <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-studio-600/70" />
-              <ZoomButton onClick={() => zoomBy(1 / ZOOM_STEP)} label="缩小" title="缩小（快捷键 -）">
-                −
-              </ZoomButton>
-              <span className="min-w-[3.2rem] text-center text-[11px] tabular-nums text-studio-300">{formatScale(scale)}</span>
-              <ZoomButton onClick={() => zoomBy(ZOOM_STEP)} label="放大" title="放大（快捷键 +）">
-                +
-              </ZoomButton>
+            <div className="pointer-events-none absolute bottom-3 right-3 z-30">
+              <div className="liquid-glass-thin liquid-elevate liquid-interactive pointer-events-auto flex items-center gap-1 rounded-full p-1.5">
+                <ZoomButton active={zoomMode === 'fit'} onClick={fitToWindow} label="适应窗口" title="适应窗口（快捷键 0）">
+                  适应窗口
+                </ZoomButton>
+                <ZoomButton active={zoomMode === 'actual'} onClick={actualSize} label="实际像素 100%" title="实际像素 100%（快捷键 1）">
+                  100%
+                </ZoomButton>
+                <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-studio-600/70" />
+                <ZoomButton onClick={() => zoomBy(1 / ZOOM_STEP)} label="缩小" title="缩小（快捷键 -）">
+                  −
+                </ZoomButton>
+                <span className="min-w-[3.2rem] text-center text-[11px] tabular-nums text-studio-300">{formatScale(scale)}</span>
+                <ZoomButton onClick={() => zoomBy(ZOOM_STEP)} label="放大" title="放大（快捷键 +）">
+                  +
+                </ZoomButton>
+                <i aria-hidden="true" className="liquid-specular" />
+              </div>
             </div>
 
             <DecodeProgress
@@ -357,8 +418,8 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
 
             {!frame && !busy && psd.status === 'error' && (
               <div className="pointer-events-none absolute inset-x-0 bottom-14 z-20 flex justify-center p-4 sm:bottom-4">
-                <span className="rounded-full border border-amber-400/40 bg-studio-950/85 px-3 py-1 text-xs text-amber-300 backdrop-blur">
-                  预览可用，但在线解码失败
+                <span className="liquid-glass-thin inline-flex items-center rounded-full px-3 py-1 text-xs text-amber-300">
+                  <span className="relative z-[1]">预览可用，但在线解码失败</span>
                 </span>
               </div>
             )}
@@ -390,17 +451,19 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
           )}
 
           {allCaveats && (
-            <div className="glass rounded-2xl p-3.5">
-              <h2 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-studio-100">
-                <span aria-hidden="true" className="h-3 w-0.5 rounded-full bg-ember" />
-                关于在线合成
-              </h2>
-              <ul className="list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-studio-300">
-                {caveats.map((caveat) => (
-                  <li key={caveat}>{caveat}</li>
-                ))}
-              </ul>
-            </div>
+            <LiquidGlass variant="pane" className="p-3.5">
+              <div>
+                <h2 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-studio-100">
+                  <span aria-hidden="true" className="h-3 w-0.5 rounded-full bg-ember" />
+                  关于在线合成
+                </h2>
+                <ul className="list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-studio-300">
+                  {caveats.map((caveat) => (
+                    <li key={caveat}>{caveat}</li>
+                  ))}
+                </ul>
+              </div>
+            </LiquidGlass>
           )}
         </section>
 

@@ -115,7 +115,9 @@ export function TimelineRail({
       className="flex w-full flex-col gap-4 lg:w-60 lg:shrink-0"
     >
       {/* Sticky month scrubber: the "where am I in the calendar" control. */}
-      <div className="glass sticky top-0 z-30 flex flex-col gap-1.5 rounded-xl px-2 py-2 shadow-lg shadow-studio-950/40">
+      <div className="liquid-glass-thin liquid-elevate liquid-interactive sticky top-0 z-30 flex flex-col gap-1.5 rounded-2xl px-2 py-2">
+        <i aria-hidden="true" className="liquid-sheen" />
+        <i aria-hidden="true" className="liquid-specular" />
         {yearGroups.length === 0 && (
           <p className="px-1 text-xs text-studio-400">还没有可导航的日期</p>
         )}

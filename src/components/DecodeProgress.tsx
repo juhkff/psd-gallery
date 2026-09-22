@@ -7,18 +7,23 @@
  * *only* those numbers - never a timed fake bar, never an invented percentage:
  *
  *  - `progress > 0` -> a determinate bar whose fill is the worker's fraction,
- *    over a ruler of tick marks sized by the document's real layer count.
+ *    over a ruler of tick marks sized by the document's real layer count, with a
+ *    specular head marking the leading edge of the light.
  *  - `progress === 0` -> an honestly indeterminate shimmer (`shimmer-line`),
  *    with no `aria-valuenow` claimed.
  *  - the only other number on screen is elapsed wall time and the real
  *    document/layer counts from the manifest.
  *
- * It is an overlay: pointer-transparent, no decode work, no canvas.
+ * It is an overlay: pointer-transparent, no decode work, no canvas. Because the
+ * whole card is pointer-transparent it deliberately does NOT enable the
+ * pointer-tracked specular - a hover highlight would require stealing pointer
+ * events from the canvas underneath.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { formatElapsed, formatProgress, formatSize, stripTrailingPercent } from '../lib/format';
 import type { PsdStatus } from '../psd/usePsdWork';
+import { LiquidGlass } from './LiquidGlass';
 
 /** The two real phases the hook can be in: the worker sets `status` per phase. */
 const PHASES = ['下载', '解码'] as const;
@@ -91,83 +96,102 @@ export function DecodeProgress({
   return (
     // Raised above the floating zoom control on phones, level with it from `sm`.
     <div className="pointer-events-none absolute inset-x-0 bottom-14 z-20 flex justify-center p-3 sm:bottom-3 sm:p-4">
-      <div className="glass w-full max-w-sm animate-fade-up rounded-2xl px-4 py-3 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.95)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span aria-hidden="true" className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-accent" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-            </span>
-            <span className="truncate text-xs text-studio-100">{labelText || '正在解码 PSD…'}</span>
+      <LiquidGlass
+        variant="pane"
+        elevate
+        className="w-full max-w-sm animate-fade-up px-4 py-3"
+      >
+        <div className="flex flex-col">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span aria-hidden="true" className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-accent" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+              </span>
+              <span className="truncate text-xs text-studio-100">{labelText}</span>
+            </div>
+            {hasFraction && (
+              <span className="font-display text-xl leading-none tabular-nums text-gradient-gold">
+                {formatProgress(progress)}
+              </span>
+            )}
           </div>
-          {hasFraction && (
-            <span className="font-display text-xl leading-none tabular-nums text-gradient-gold">
-              {formatProgress(progress)}
+
+          {/* Light moving through glass: tick ruler first, then the worker's real
+              fraction on top, with a specular head at the leading edge. */}
+          <div
+            role="progressbar"
+            aria-label="PSD 解码进度"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={hasFraction ? Math.round(progress * 100) : undefined}
+            aria-valuetext={hasFraction ? undefined : '正在解码，进度未知'}
+            className="relative mt-2.5 h-2 overflow-hidden rounded-full bg-studio-950/70 ring-1 ring-inset ring-studio-100/10"
+          >
+            <span aria-hidden="true" className="absolute inset-0 flex items-stretch justify-between px-px opacity-70">
+              {Array.from({ length: tickCount }, (_, index) => (
+                <span key={index} className="w-px bg-studio-100/20" />
+              ))}
             </span>
-          )}
-        </div>
-
-        <div
-          role="progressbar"
-          aria-label="PSD 解码进度"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={hasFraction ? Math.round(progress * 100) : undefined}
-          aria-valuetext={hasFraction ? undefined : '正在解码，进度未知'}
-          className="relative mt-2.5 h-1.5 overflow-hidden rounded-full bg-studio-800/90 ring-1 ring-inset ring-studio-100/5"
-        >
-          <span aria-hidden="true" className="absolute inset-0 flex items-stretch justify-between px-px opacity-70">
-            {Array.from({ length: tickCount }, (_, index) => (
-              <span key={index} className="w-px bg-studio-600/80" />
-            ))}
-          </span>
-          {hasFraction ? (
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ember via-accent to-accent-soft transition-[width] duration-300 ease-out"
-              style={{ width: `${Math.max(1.5, progress * 100)}%` }}
-            />
-          ) : (
-            <span aria-hidden="true" className="shimmer-line absolute inset-0" />
-          )}
-        </div>
-
-        <ol className="mt-2 flex items-center gap-2 text-[10px] text-studio-400">
-          {PHASES.map((label, index) => (
-            <li key={label} className="flex items-center gap-1.5">
+            {hasFraction ? (
               <span
                 aria-hidden="true"
-                className={`h-1 w-1 rounded-full ${
-                  index < phaseIndex ? 'bg-accent' : index === phaseIndex ? 'animate-pulse bg-accent' : 'bg-studio-600'
-                }`}
-              />
-              <span className={index <= phaseIndex ? 'text-studio-300' : undefined}>{label}</span>
-              {index < PHASES.length - 1 && <span aria-hidden="true" className="h-px w-4 bg-studio-700" />}
-            </li>
-          ))}
-        </ol>
+                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ember via-accent to-accent-soft shadow-[0_0_14px_-2px_rgba(201,162,39,0.9)] transition-[width] duration-300 ease-out"
+                style={{ width: `${Math.max(1.5, progress * 100)}%` }}
+              >
+                <span className="absolute inset-0 overflow-hidden rounded-full">
+                  <span className="shimmer-line absolute inset-0 opacity-60" />
+                </span>
+                <span className="absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 translate-x-1/2 rounded-full bg-studio-100 shadow-[0_0_12px_4px_rgba(236,236,242,0.55)]" />
+              </span>
+            ) : (
+              <span aria-hidden="true" className="shimmer-line absolute inset-0" />
+            )}
+          </div>
 
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-studio-400">
-          <span className="inline-flex items-center gap-1 text-studio-300">
-            <LocalIcon />
-            本地浏览器解码
-          </span>
-          <MetaDot />
-          <span className="tabular-nums text-studio-300">{formatElapsed(elapsedMs)}</span>
-          {layerCount > 0 && (
-            <>
-              <MetaDot />
-              <span className="tabular-nums">{layerCount} 个图层</span>
-            </>
-          )}
-          {documentWidth > 0 && documentHeight > 0 && (
-            <>
-              <MetaDot />
-              <span className="tabular-nums">{formatSize(documentWidth, documentHeight)} px</span>
-            </>
-          )}
-        </p>
-      </div>
+          <ol className="mt-2.5 flex items-center gap-2 text-[10px] text-studio-400">
+            {PHASES.map((label, index) => (
+              <li key={label} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className={`h-1 w-1 rounded-full ${
+                    index < phaseIndex ? 'bg-accent' : index === phaseIndex ? 'animate-pulse bg-accent' : 'bg-studio-600'
+                  }`}
+                />
+                <span
+                  className={`liquid-glass-thin inline-flex items-center rounded-full px-1.5 py-px ${
+                    index <= phaseIndex ? 'text-studio-200' : 'text-studio-400'
+                  }`}
+                >
+                  <span className="relative z-[1]">{label}</span>
+                </span>
+                {index < PHASES.length - 1 && <span aria-hidden="true" className="h-px w-4 bg-studio-100/15" />}
+              </li>
+            ))}
+          </ol>
+
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-studio-400">
+            <span className="inline-flex items-center gap-1 text-studio-300">
+              <LocalIcon />
+              本地浏览器解码
+            </span>
+            <MetaDot />
+            <span className="tabular-nums text-studio-300">{formatElapsed(elapsedMs)}</span>
+            {layerCount > 0 && (
+              <>
+                <MetaDot />
+                <span className="tabular-nums">{layerCount} 个图层</span>
+              </>
+            )}
+            {documentWidth > 0 && documentHeight > 0 && (
+              <>
+                <MetaDot />
+                <span className="tabular-nums">{formatSize(documentWidth, documentHeight)} px</span>
+              </>
+            )}
+          </p>
+        </div>
+      </LiquidGlass>
     </div>
   );
 }
