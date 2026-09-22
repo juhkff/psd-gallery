@@ -13,7 +13,7 @@
  * clips with border-radius instead.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Gallery } from './components/Gallery';
 import { LiquidGlass } from './components/LiquidGlass';
 import { UnbuiltList } from './components/UnbuiltList';
@@ -77,12 +77,13 @@ function Stat({ value, label, hint, delay = 0 }: {
     <LiquidGlass
       variant="thin"
       elevate
-      className="animate-float min-w-[7.5rem] px-4 py-3"
+      interactive
+      className="animate-float hover-glow min-w-[8.5rem] px-4 py-3.5 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_-18px_rgba(0,0,0,0.95)]"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <span className="font-display text-2xl leading-none text-gradient-gold">{value}</span>
-      <span className="mt-1 block text-[11px] tracking-wide text-studio-300">{label}</span>
-      {hint && <span className="block text-[10px] text-studio-400">{hint}</span>}
+      <span className="font-display text-[1.75rem] leading-none text-gradient-gold">{value}</span>
+      <span className="mt-1.5 block text-[11px] tracking-wide text-studio-300">{label}</span>
+      {hint && <span className="mt-0.5 block text-[10px] text-studio-400">{hint}</span>}
     </LiquidGlass>
   );
 }
@@ -117,6 +118,44 @@ function GallerySkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Reading progress: a light travelling along the top edge.
+ *
+ * Writes a scale transform directly via a ref instead of state, so scrolling
+ * never re-renders the tree. Purely decorative, so it is hidden from assistive
+ * tech and removed under prefers-reduced-motion.
+ */
+function ScrollProgress() {
+  const bar = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    const update = () => {
+      const node = bar.current;
+      if (!node) return;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+      node.style.transform = `scaleX(${ratio})`;
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] origin-left"
+    >
+      <span
+        ref={bar}
+        className="block h-full w-full origin-left scale-x-0 bg-gradient-to-r from-accent-soft via-accent to-ember shadow-[0_0_12px_rgba(201,162,39,0.55)] transition-transform duration-150 ease-out"
+      />
+    </span>
   );
 }
 
@@ -155,12 +194,13 @@ export function App() {
 
   return (
     <div className="relative min-h-screen w-full">
+      <ScrollProgress />
       {/* Ambient light. Fixed and pointer-transparent, so it never eats a click
           and never moves with scroll (which would make the glass look liquid
           rather than like a pane of it). */}
-      <div className="studio-backdrop pointer-events-none fixed inset-0 -z-10" aria-hidden="true" />
+      <div className="studio-backdrop pointer-events-none absolute inset-x-0 top-0 -z-10" aria-hidden="true" />
       <div
-        className="grain-overlay pointer-events-none fixed inset-0 -z-10 opacity-[0.045] mix-blend-overlay"
+        className="grain-overlay pointer-events-none fixed inset-0 -z-10 opacity-[0.06] mix-blend-overlay"
         aria-hidden="true"
       />
       {/* A soft aurora band behind the content. This is what makes the glass
@@ -168,22 +208,22 @@ export function App() {
           something coloured behind it to bend. Kept well below text contrast. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-[18vh] -z-10 h-[46vh] opacity-[0.5] blur-3xl"
+        className="pointer-events-none absolute inset-x-0 top-[16vh] -z-10 h-[50vh] opacity-[0.8] blur-3xl"
         style={{
           background:
-            'linear-gradient(100deg, color-mix(in oklab, var(--color-ion) 42%, transparent), color-mix(in oklab, var(--color-ice) 26%, transparent) 45%, color-mix(in oklab, var(--color-ember) 34%, transparent))',
+            'linear-gradient(100deg, color-mix(in oklab, var(--color-ion) 78%, transparent), color-mix(in oklab, var(--color-ice) 52%, transparent) 45%, color-mix(in oklab, var(--color-ember) 66%, transparent))',
           maskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
           WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
         }}
       />
       {/* A slow drifting bloom, so the glass always has something moving behind it. */}
       <div
-        className="animate-drift pointer-events-none fixed -z-10 h-[38rem] w-[38rem] rounded-full opacity-40 blur-3xl"
+        className="animate-drift pointer-events-none absolute -z-10 h-[42rem] w-[42rem] rounded-full opacity-60 blur-3xl"
         style={{
           top: '-12rem',
           left: '-10rem',
           background:
-            'radial-gradient(circle, color-mix(in oklab, var(--color-ion) 34%, transparent), transparent 66%)',
+            'radial-gradient(circle, color-mix(in oklab, var(--color-ion) 62%, transparent), transparent 66%)',
         }}
         aria-hidden="true"
       />
@@ -300,9 +340,11 @@ function Hero({ stats }: { stats: HeroStats }) {
         className="pointer-events-none absolute inset-x-10 -bottom-px h-px bg-gradient-to-r from-transparent via-ice/35 to-transparent"
       />
 
-      <p className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-accent/90">
-        <span className="inline-block h-px w-8 bg-accent/60" />
-        Drawing Practice Archive
+      <p className="mb-4 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.3em] text-accent/90">
+        <span className="inline-block h-px w-10 bg-gradient-to-r from-transparent to-accent/70" />
+        <span className="rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1 text-accent-soft">
+          Drawing Practice Archive
+        </span>
       </p>
       <h1 className="font-display text-4xl leading-tight tracking-tight sm:text-6xl">
         每日练习<span className="text-gradient-gold">·</span>

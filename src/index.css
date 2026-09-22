@@ -161,34 +161,42 @@
 @utility liquid-glass {
   position: relative;
   isolation: isolate;
-  background-color: color-mix(in oklab, var(--color-studio-850) 58%, transparent);
+  background-color: color-mix(in oklab, var(--color-studio-850) 52%, transparent);
   background-image:
+    /* front-face light, angled like a real sheet */
     linear-gradient(
       168deg,
-      color-mix(in oklab, var(--color-studio-100) 11%, transparent),
-      color-mix(in oklab, var(--color-studio-100) 2%, transparent) 38%,
-      transparent 68%
+      color-mix(in oklab, var(--color-studio-100) 13%, transparent),
+      color-mix(in oklab, var(--color-studio-100) 3%, transparent) 36%,
+      transparent 66%
+    ),
+    /* chromatic fringing: cool at the lit corner, warm at the shaded one.
+       This is what separates "glass" from "translucent grey box". */
+    radial-gradient(
+      120% 85% at 10% -16%,
+      color-mix(in oklab, var(--color-ice) 20%, transparent),
+      transparent 56%
     ),
     radial-gradient(
-      130% 90% at 14% -14%,
-      color-mix(in oklab, var(--color-ice) 13%, transparent),
-      transparent 58%
+      85% 70% at 94% 110%,
+      color-mix(in oklab, var(--color-ion) 18%, transparent),
+      transparent 60%
     ),
     radial-gradient(
-      90% 70% at 92% 108%,
-      color-mix(in oklab, var(--color-ion) 12%, transparent),
+      70% 50% at 78% -10%,
+      color-mix(in oklab, var(--color-accent) 12%, transparent),
       transparent 62%
     );
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(24px) saturate(190%);
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 34%, transparent),
-    inset 0 -1px 0 0 color-mix(in oklab, black 55%, transparent),
-    inset 0 0 60px -20px color-mix(in oklab, var(--color-ice) 45%, transparent),
-    0 22px 60px -22px rgb(0 0 0 / 0.85),
-    0 6px 18px -10px rgb(0 0 0 / 0.7);
-  border: 1px solid color-mix(in oklab, var(--color-studio-100) 17%, transparent);
-  border-radius: 20px;
+    inset 0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 42%, transparent),
+    inset 0 -1px 0 0 color-mix(in oklab, black 60%, transparent),
+    inset 0 0 70px -22px color-mix(in oklab, var(--color-ice) 55%, transparent),
+    0 26px 70px -24px rgb(0 0 0 / 0.9),
+    0 8px 22px -12px rgb(0 0 0 / 0.75);
+  border: 1px solid color-mix(in oklab, var(--color-studio-100) 20%, transparent);
+  border-radius: 22px;
 }
 
 /* Lighter pane for dense UI (layer rows, toolbars) where the full effect is noisy. */
@@ -235,23 +243,23 @@
   border-radius: inherit;
   overflow: hidden;
   mix-blend-mode: screen;
-  opacity: 0.75;
+  opacity: 0.9;
 
   &::before {
     content: '';
     position: absolute;
     top: -60%;
     left: -40%;
-    width: 55%;
+    width: 58%;
     height: 220%;
     background: linear-gradient(
       100deg,
       transparent,
-      color-mix(in oklab, var(--color-studio-100) 12%, transparent) 42%,
-      color-mix(in oklab, var(--color-ice) 16%, transparent) 55%,
+      color-mix(in oklab, var(--color-studio-100) 16%, transparent) 40%,
+      color-mix(in oklab, var(--color-ice) 22%, transparent) 54%,
       transparent
     );
-    filter: blur(6px);
+    filter: blur(7px);
     animation: var(--animate-liquid);
   }
 }
@@ -325,12 +333,30 @@
  * backdrop + texture
  * ------------------------------------------------------------------ */
 
+/*
+ * Ambient light. Liquid glass only reads as glass when there is actual light
+ * behind it to pick up - on a flat near-black page every pane looks like a dark
+ * rectangle no matter how good the rim is. So the backdrop is deliberately
+ * colourful and bright, and the panes stay dark on top of it: that contrast IS
+ * the effect.
+ */
 @utility studio-backdrop {
+  /*
+   * Positioned with LENGTHS, not percentages. The element is stretched over the
+   * full document height (see App), so `%` positions would put every pool at a
+   * fraction of the whole page - the top of the page would be a dark band and
+   * the pools would drift as the library grows. `vw` keeps them anchored to the
+   * top of the content at any page height, and `background-attachment: fixed`
+   * keeps the light source steady while scrolling.
+   */
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   background-image:
-    radial-gradient(58rem 38rem at 10% -12%, color-mix(in oklab, var(--color-accent) 18%, transparent), transparent 68%),
-    radial-gradient(46rem 34rem at 92% 4%, color-mix(in oklab, var(--color-ion) 20%, transparent), transparent 70%),
-    radial-gradient(40rem 30rem at 48% 112%, color-mix(in oklab, var(--color-ember) 16%, transparent), transparent 72%),
-    radial-gradient(30rem 24rem at 78% 62%, color-mix(in oklab, var(--color-ice) 9%, transparent), transparent 70%);
+    radial-gradient(58rem 38rem at 6vw -14vh, color-mix(in oklab, var(--color-accent) 40%, transparent 66%),
+    radial-gradient(46rem 34rem at 94vw 6vh, color-mix(in oklab, var(--color-ion) 46%, transparent 68%),
+    radial-gradient(52rem 40rem at 46vw 120vh, color-mix(in oklab, var(--color-ember) 38%, transparent 70%),
+    radial-gradient(34rem 26rem at 76vw 78vh, color-mix(in oklab, var(--color-ice) 26%, transparent 68%),
+    radial-gradient(28rem 22rem at 20vw 52vh, color-mix(in oklab, var(--color-ion) 24%, transparent 70%);
 }
 
 /*
@@ -361,6 +387,40 @@
 }
 
 @utility grain-overlay { background-image: var(--grain-url); }
+
+/*
+ * The mat an artwork sits in. A glass frame around a picture only works if the
+ * picture is clearly *behind* it, so the mat is recessed: dark, inset, with the
+ * shadow falling inward from the frame edge.
+ */
+@utility artwork-mat {
+  background-color: color-mix(in oklab, var(--color-studio-950) 72%, transparent);
+  box-shadow:
+    inset 0 2px 14px -4px rgb(0 0 0 / 0.95),
+    inset 0 0 0 1px color-mix(in oklab, var(--color-studio-100) 7%, transparent),
+    0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 10%, transparent);
+}
+
+/*
+ * Section divider: a hairline that fades in from the left, brightens under the
+ * label and dies out - reads as engraved into glass rather than as a border.
+ */
+@utility glass-divider {
+  height: 1px;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-studio-100) 22%, transparent) 12%,
+    color-mix(in oklab, var(--color-ice) 26%, transparent) 34%,
+    color-mix(in oklab, var(--color-studio-100) 8%, transparent) 62%,
+    transparent
+  );
+}
+
+/* A soft pool of light behind a card that lifts on hover. */
+@utility hover-glow {
+  transition: box-shadow 0.4s ease, translate 0.4s ease;
+}
 
 @utility checkerboard {
   /* Standard transparency indicator so PSD alpha is readable. */

@@ -85,11 +85,16 @@ function WorkTile({ date, work, selected }: WorkTileProps) {
         selected ? 'ring-1 ring-accent/70' : ''
       }`}
     >
-      {/* The image sits in a matte well so the glass frame reads as a frame. */}
-      <div className="checkerboard m-1.5 overflow-hidden rounded-[10px] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),inset_0_-8px_20px_-12px_rgba(0,0,0,0.9)]"
+      {/* The artwork sits in a recessed mat: the mat is darker than the frame and
+          its shadow falls inward, which is what makes the picture read as being
+          behind the glass rather than painted on it. */}
+      <div
+        className="artwork-mat m-1.5 overflow-hidden rounded-[12px]"
         style={{ aspectRatio: `${thumbWidth} / ${thumbHeight}` }}
       >
-        <Thumbnail work={work} />
+        <div className="checkerboard h-full w-full opacity-60">
+          <Thumbnail work={work} />
+        </div>
       </div>
       <div className="flex flex-col gap-1 px-3 pb-3 pt-1 text-left">
         <span className="flex items-baseline justify-between gap-2">
@@ -174,24 +179,29 @@ export function Gallery({ groups, selected = null }: GalleryProps) {
             // scroll-mt-* keeps the anchor from landing under the edge of the viewport
             className="reveal flex scroll-mt-24 flex-col gap-4"
           >
-            <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-              <h3
-                data-date={group.date}
-                className="font-display text-lg font-semibold tracking-wide text-studio-100"
-              >
-                {formatDateLabel(group.date)}
-              </h3>
-              <span className="text-[11px] text-studio-400">{group.works.length} 件作品</span>
-              <span className="ml-auto hidden text-[11px] tabular-nums text-studio-600 sm:inline">
-                {group.date.split('-').join(' · ')}
-              </span>
-              {/* A hairline that fades out: separates dates without drawing a border. */}
-              <span
-                aria-hidden="true"
-                className="h-px w-full bg-gradient-to-r from-studio-100/16 via-studio-100/5 to-transparent"
-              />
+            <div className="flex flex-col gap-2.5">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 translate-y-[-2px] rounded-full bg-accent shadow-[0_0_10px_rgba(201,162,39,0.75)]"
+                />
+                <h3
+                  data-date={group.date}
+                  className="font-display text-lg leading-none font-semibold tracking-wide text-studio-100"
+                >
+                  {formatDateLabel(group.date)}
+                </h3>
+                <span className="rounded-full border border-studio-100/10 bg-studio-100/5 px-2 py-0.5 text-[10px] tabular-nums text-studio-300">
+                  {group.works.length} 件
+                </span>
+                <span className="ml-auto hidden text-[11px] tabular-nums tracking-[0.18em] text-studio-600 sm:inline">
+                  {group.date}
+                </span>
+              </div>
+              {/* Engraved hairline: fades in, brightens under the label, dies out. */}
+              <span aria-hidden="true" className="glass-divider w-full" />
             </div>
-            <ul className="grid grid-cols-2 items-start gap-3.5 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] items-start gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
               {group.works.map((work) => (
                 // self-start keeps a landscape tile from being stretched to the
                 // height of a portrait neighbour in the same row.
