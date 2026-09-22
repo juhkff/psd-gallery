@@ -425,22 +425,36 @@
 @utility grain-overlay { background-image: var(--grain-url); }
 
 /*
- * The mat an artwork sits in. A glass frame around a picture only works if the
- * picture is clearly *behind* it, so the mat is recessed: dark, inset, with the
- * shadow falling inward from the frame edge.
+ * The mat an artwork sits in.
+ *
+ * A glass frame around a picture only reads as glass if the picture is clearly
+ * *behind* it, so the mat is recessed - but an almost-black mat is the wrong
+ * answer: over a large stage it becomes a black void with a print floating in
+ * it, which is what the first version looked like (measured RGB 7-13 across
+ * most of the mat). Instead the mat keeps a light tint and gets its depth from
+ * graded insets: the shadow falls inward from the frame, strongest at the
+ * corners, and a cool pool at the top keeps it feeling lit rather than dead.
  */
 @utility artwork-mat {
-  background-color: color-mix(in oklab, var(--color-studio-950) 72%, transparent);
+  background-color: color-mix(in oklab, var(--color-studio-900) 58%, transparent);
+  background-image:
+    linear-gradient(
+      165deg,
+      color-mix(in oklab, var(--color-studio-100) 5%, transparent),
+      transparent 46%
+    ),
+    radial-gradient(
+      120% 80% at 50% -18%,
+      color-mix(in oklab, var(--color-ice) 10%, transparent),
+      transparent 62%
+    );
   box-shadow:
-    inset 0 2px 14px -4px rgb(0 0 0 / 0.95),
-    inset 0 0 0 1px color-mix(in oklab, var(--color-studio-100) 7%, transparent),
-    0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 10%, transparent);
+    inset 0 3px 16px -6px rgb(0 0 0 / 0.8),
+    inset 0 -1px 0 0 color-mix(in oklab, var(--color-studio-100) 8%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, var(--color-studio-100) 6%, transparent),
+    0 1px 0 0 color-mix(in oklab, var(--color-studio-100) 12%, transparent);
 }
 
-/*
- * Section divider: a hairline that fades in from the left, brightens under the
- * label and dies out - reads as engraved into glass rather than as a border.
- */
 @utility glass-divider {
   height: 1px;
   background-image: linear-gradient(

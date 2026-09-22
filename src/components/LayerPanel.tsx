@@ -14,12 +14,25 @@
  * Row selection is local UI state only - it never touches visibility or the
  * worker, so toggling/selecting can never trigger a re-decode.
  *
+ * ROW RHYTHM (deliberate, because these rows are the most-looked-at surface):
+ * every row is a two-line block with a fixed metric - a 28px name line that the
+ * 28px eye control shares, then a 16px chip line. Every chip and every plain
+ * value on the chip line is exactly `h-4`, so the second line is one shared
+ * baseline instead of a ragged mix of pills and text. Group rows get a child
+ * count so they keep the same two-line height as leaves.
+ *
+ * NESTING: the guide is drawn per row and extends 4px past the row's top and
+ * bottom, which is exactly the list gap - so consecutive rows' rails meet and
+ * read as one continuous line rather than a dashed column. Each level is a rail
+ * plus, at the deepest level, an elbow that turns into the row: shape, not
+ * colour, is what says "this belongs to that group".
+ *
  * LIQUID GLASS
  * The panel is one `liquid-glass` pane (with its moving sheen) and every layer
  * row is a `liquid-glass-thin` surface: hover/selection brighten the row's rim
- * (border color, not an opaque wash) and selection adds a gold accent rail. The
- * eye button keeps its single-svg child contract; state is expressed with a
- * translucent ring rather than a wrapper element.
+ * (border color, not an opaque wash) and selection adds a gold rail plus a soft
+ * glow. The eye button keeps its single-svg child contract; state is expressed
+ * with the icon shape, the fill and a ring rather than a wrapper element.
  */
 
 import { useMemo, useState, type ReactNode } from 'react';
@@ -29,6 +42,13 @@ import { formatOpacity, formatSize } from '../lib/format';
 import { KIND_LABELS } from '../psd/layer-info';
 import type { VisibilityMap } from '../psd/protocol';
 import { layerId } from '../psd/composite';
+
+/** Horizontal step per nesting level, in px. Shared by rows and guides. */
+const INDENT = 16;
+/** Left edge of the guide rails. */
+const RAIL_LEFT = 10;
+/** Row-local y of the name line's centre; the elbow lands here. */
+const ELBOW_TOP = 20;
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -44,7 +64,20 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
-/** A tiny glass pill. Tone is carried by the label color so the pane tint stays. */
+/** A group marker: a stacked-folders glyph, so groups are not "just bold". */
+function GroupIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0 text-studio-400" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <path d="M1.8 12.2V4.4h4l1.2 1.5h7.2v6.3z" />
+      <path d="M3.4 8.1h9.2" />
+    </svg>
+  );
+}
+
+/**
+ * A tiny glass pill. Tone is carried by the label color so the pane tint stays.
+ * Fixed `h-4` is the alignment contract for the chip line.
+ */
 function Chip({
   children,
   tone = 'neutral',
@@ -62,7 +95,7 @@ function Chip({
   return (
     <span
       title={title}
-      className={`liquid-glass-thin inline-flex items-center rounded-full px-1.5 py-px text-[10px] leading-4 ${tones[tone]}`}
+      className={`liquid-glass-thin inline-flex h-4 shrink-0 items-center rounded-full px-1.5 text-[10px] leading-none ${tones[tone]}`}
     >
       <span className="relative z-[1]">{children}</span>
     </span>
@@ -111,43 +144,67 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
   const kindLabel = node.kind ? KIND_LABELS[node.kind] ?? node.kind : null;
   const approximate = isApproximate(node.blendMode);
   const buried = own && !shown;
+  const childCount = node.children?.length ?? 0;
 
   return (
-    <li>
+    <li className="min-w-0">
       <div
         data-testid="layer-row"
         data-layer-id={id}
         data-visible={shown ? 'true' : 'false'}
         data-selected={selected ? 'true' : undefined}
         onClick={() => onSelect(id)}
-        style={{ paddingLeft: `${8 + depth * 16}px` }}
-        className={`liquid-glass-thin group relative flex items-stretch gap-2 rounded-xl py-1.5 pr-2 transition-colors ${
-          selected ? 'border-accent/45' : 'border-studio-100/10 hover:border-studio-100/25'
+        style={{ paddingLeft: `${8 + depth * INDENT}px` }}
+        className={`liquid-glass-thin hover-glow group relative grid min-h-[3.75rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl py-1.5 pr-2.5 ${
+          selected
+            ? 'border-accent/50 shadow-[0_0_0_1px_rgba(201,162,39,0.22),0_18px_36px_-22px_rgba(201,162,39,0.85)]'
+            : 'border-studio-100/10 hover:border-studio-100/25 hover:shadow-[0_14px_30px_-20px_rgba(0,0,0,0.95)]'
         }`}
       >
-        {/* Selection wash + gold rail. Both are painted below the row content. */}
+        {/* Selection: a warm wash, a gold rail on the leading edge and a soft
+            outer glow. Enough to be unmistakable at a glance, but it stays a
+            translucent tint - no opaque outline, which would fight the glass. */}
         {selected && (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-xl bg-accent/[0.10]" />
+          <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-xl bg-accent/[0.13]" />
         )}
         {selected && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-gradient-to-b from-accent-soft via-accent to-ember shadow-[0_0_10px_rgba(201,162,39,0.5)]"
+            className="pointer-events-none absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-gradient-to-b from-accent-soft via-accent to-ember shadow-[0_0_12px_rgba(201,162,39,0.75)]"
           />
         )}
 
-        {/* Indentation guides: one hairline per ancestor group level. */}
+        {/* Nesting guide: one rail per ancestor level, plus an elbow at the
+            deepest level. `-top-1`/`-bottom-1` bridge the list gap so the rails
+            of consecutive rows join into a continuous line. */}
         {depth > 0 && (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-1 left-2 z-[1] flex">
-            {Array.from({ length: depth }, (_, index) => (
-              <span
-                key={index}
-                className={`w-4 self-stretch border-l ${index === depth - 1 ? 'border-accent/25' : 'border-studio-600/40'}`}
-              />
-            ))}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-1 -top-1 z-[1] flex"
+            style={{ left: RAIL_LEFT }}
+          >
+            {Array.from({ length: depth }, (_, index) => {
+              const deepest = index === depth - 1;
+              return (
+                <span
+                  key={index}
+                  className={`relative w-4 border-l ${deepest ? 'border-studio-400/40' : 'border-studio-600/45'}`}
+                >
+                  {deepest && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-0 h-px w-2.5 bg-studio-400/45"
+                      style={{ top: ELBOW_TOP + 4 }}
+                    />
+                  )}
+                </span>
+              );
+            })}
           </span>
         )}
 
+        {/* The eye. A 28px rounded square - big enough to hit, and a square (not
+            a circle) so it reads as a control rather than as a status LED. */}
         <button
           type="button"
           data-testid="layer-toggle"
@@ -159,17 +216,18 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
             event.stopPropagation();
             onToggle(id, !own);
           }}
-          className={`relative z-[1] mt-0.5 shrink-0 self-start rounded-full border p-1.5 transition disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`relative z-[1] grid h-7 w-7 shrink-0 place-items-center rounded-[9px] border transition duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${
             own
-              ? 'border-accent/40 bg-accent/15 text-accent shadow-[inset_0_1px_0_rgba(236,236,242,0.16)]'
-              : 'border-studio-100/10 bg-studio-950/40 text-studio-400 hover:text-studio-100'
+              ? 'border-accent/35 bg-gradient-to-b from-accent/25 to-accent/[0.06] text-accent-soft shadow-[inset_0_1px_0_rgba(236,236,242,0.22)] hover:border-accent/60 hover:from-accent/35'
+              : 'border-studio-100/10 bg-studio-950/50 text-studio-400 hover:border-studio-100/25 hover:text-studio-200'
           }`}
         >
           <EyeIcon open={own} />
         </button>
 
-        <div className="relative z-[1] min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="relative z-[1] min-w-0">
+          <div className="flex min-h-7 min-w-0 items-center gap-2">
+            {node.isGroup && <GroupIcon />}
             <span
               className={`truncate text-[13px] leading-5 ${node.isGroup ? 'font-semibold' : ''} ${
                 shown ? 'text-studio-100' : 'text-studio-400'
@@ -180,18 +238,26 @@ function LayerRow({ node, id, depth, visibility, effective, disabled, selectedId
             {kindLabel && <Chip>{kindLabel}</Chip>}
           </div>
 
-          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          {/* The chip line. Everything here is exactly h-4 / leading-4 so the row
+              keeps one shared baseline; opacity and size are plain tabular text
+              (not pills) so a row does not turn into five competing lozenges. */}
+          <div className="mt-1 flex min-h-4 flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] leading-4">
             {node.blendMode !== 'normal' && (
               <Chip tone="accent" title={approximate ? '浏览器只能近似还原' : undefined}>
                 混合：{blendLabel(node.blendMode)}
                 {approximate ? ' ≈' : ''}
               </Chip>
             )}
-            {node.opacity < 1 && <Chip title="图层不透明度">{formatOpacity(node.opacity)}</Chip>}
-            {!node.isGroup && <span className="text-[10px] tabular-nums text-studio-400">{formatSize(width, height)} px</span>}
-            {!node.hasImage && !node.isGroup && <span className="text-[10px] text-studio-400">无像素数据</span>}
-            {node.note && <span className="text-[10px] text-amber-300/90">{node.note}</span>}
-            {buried && <span className="text-[10px] text-amber-300/90">所在组已隐藏</span>}
+            {node.opacity < 1 && (
+              <span className="tabular-nums text-studio-300" title="图层不透明度">
+                {formatOpacity(node.opacity)}
+              </span>
+            )}
+            {!node.isGroup && <span className="tabular-nums text-studio-400">{formatSize(width, height)} px</span>}
+            {!node.hasImage && !node.isGroup && <span className="text-studio-400">无像素数据</span>}
+            {node.isGroup && <span className="tabular-nums text-studio-400">{childCount} 个子图层</span>}
+            {node.note && <span className="text-amber-300/90">{node.note}</span>}
+            {buried && <span className="text-amber-300/90">所在组已隐藏</span>}
           </div>
         </div>
       </div>
@@ -244,20 +310,28 @@ function collectStats(
   return stats;
 }
 
+/**
+ * Placeholder rows, on the real row metric: a 28px eye slot on a 28px name line
+ * and a 16px chip line. A skeleton that is a different height than the real rows
+ * makes the whole list jump when the decode lands.
+ */
 function LayerSkeleton() {
   const widths = ['72%', '54%', '64%', '46%', '58%', '40%'];
   return (
     <div className="flex flex-col gap-2 py-1">
       <p className="text-xs leading-relaxed text-studio-300">正在解码图层…图层列表会在画面合成完成后出现。</p>
-      <div aria-hidden="true" className="flex flex-col gap-1.5">
+      <div aria-hidden="true" className="flex flex-col gap-1">
         {widths.map((width, index) => (
           <div
             key={index}
-            className="liquid-glass-thin flex items-center gap-2 rounded-xl py-1.5 pr-2"
-            style={{ paddingLeft: `${8 + (index % 3) * 16}px` }}
+            className="liquid-glass-thin grid min-h-[3.75rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl py-1.5 pr-2.5"
+            style={{ paddingLeft: `${8 + (index % 3) * INDENT}px` }}
           >
-            <span className="relative z-[1] h-4 w-4 shrink-0 rounded-full bg-studio-800" />
-            <span className="shimmer-line relative z-[1] h-3 rounded bg-studio-800/80" style={{ width }} />
+            <span className="h-7 w-7 shrink-0 rounded-[9px] bg-studio-800/80" />
+            <span className="flex min-h-7 flex-col justify-center gap-2">
+              <span className="shimmer-line h-3 rounded bg-studio-800/80" style={{ width }} />
+              <span className="h-2.5 w-24 rounded bg-studio-800/60" />
+            </span>
           </div>
         ))}
       </div>
@@ -289,12 +363,17 @@ export function LayerPanel({
   const select = (id: string) => setSelectedId((current) => (current === id ? null : id));
 
   const controlClass =
-    'flex-1 px-2 py-1 text-[11px] text-studio-300 transition hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40';
+    'rounded-full px-2 py-1 text-[11px] text-studio-300 transition hover:bg-accent/[0.12] hover:text-accent-soft disabled:cursor-not-allowed disabled:opacity-40';
 
+  // Height comes from the row: `items-stretch` matches the panel to the viewer
+  // column, and `min-h-0` keeps a 60-layer document from growing the page - the
+  // row list scrolls inside instead. (A fixed `100vh-11rem` height was taller
+  // than the viewer column at a 1000px viewport, so the pane hung past the fold
+  // and read as an unfinished rectangle.)
   return (
-    <section className="liquid-glass liquid-interactive flex min-h-0 flex-col p-3 lg:h-[calc(100vh-11rem)] lg:w-80 lg:shrink-0">
+    <section className="liquid-glass liquid-interactive flex min-h-0 flex-col p-3 lg:w-80 lg:shrink-0">
       <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-3">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h2 className="flex items-baseline gap-2 font-display text-sm font-semibold tracking-wide text-studio-100">
@@ -318,16 +397,25 @@ export function LayerPanel({
             </button>
           </div>
 
-          <div className="flex overflow-hidden rounded-xl border border-studio-100/10 bg-studio-950/40">
-            <button type="button" onClick={onShowAll} disabled={disabled} className={controlClass}>
+          <div aria-hidden="true" className="glass-divider mt-2.5" />
+
+          {/* Segmented control: pill wrapper, pill segments, hairline dividers. */}
+          <div className="mt-2.5 flex items-stretch rounded-full border border-studio-100/10 bg-studio-950/40 p-0.5">
+            <button type="button" onClick={onShowAll} disabled={disabled} className={`flex-1 ${controlClass}`}>
               全部显示
             </button>
-            <span aria-hidden="true" className="w-px bg-studio-100/10" />
-            <button type="button" onClick={onHideAll} disabled={disabled} className={controlClass}>
+            <span
+              aria-hidden="true"
+              className="my-1 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-100/15 to-transparent"
+            />
+            <button type="button" onClick={onHideAll} disabled={disabled} className={`flex-1 ${controlClass}`}>
               全部隐藏
             </button>
-            <span aria-hidden="true" className="w-px bg-studio-100/10" />
-            <button type="button" onClick={onReset} disabled={disabled} className={controlClass}>
+            <span
+              aria-hidden="true"
+              className="my-1 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-100/15 to-transparent"
+            />
+            <button type="button" onClick={onReset} disabled={disabled} className={`flex-1 ${controlClass}`}>
               恢复默认
             </button>
           </div>

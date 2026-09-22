@@ -15,13 +15,16 @@
  *
  * LIQUID GLASS
  * The whole stage is one `liquid-glass` sheet (LiquidGlass renders the moving
- * sheen layer over it), the transparency field sits on `checkerboard`, and the
- * artwork gets the glass treatment it needs to stay inspectable: a soft
- * vignette plus a faint diagonal reflection streak, never a full-area blur that
- * would make 1:1 inspection impossible. Everything that floats *over* the
- * artwork (the live/preview badge, the zoom cluster, the decode card) is real
- * glass, so its backdrop is the artwork itself - which is where the blur is
- * actually provable in a screenshot.
+ * sheen layer over it). Inside it the document sits on a recessed `artwork-mat`
+ * with a mounted-print edge (hairline ring + contact shadow), so the picture
+ * reads as a print lying *behind* the glass rather than a texture painted on a
+ * dark rectangle. The reflection is ONE narrow diagonal band painted across the
+ * whole sheet - mat included - because a real reflection is continuous across
+ * whatever is behind it; a full-area wash would only dull the print and make 1:1
+ * inspection worse. Everything that floats *over* the artwork (the live/preview
+ * badge, the zoom cluster, the decode card) is real glass, so its backdrop is
+ * the artwork itself - which is where the blur is actually provable in a
+ * screenshot.
  *
  * BACKDROP-FILTER CONTRACT (verified in this Chrome with .bench-output/bf-probe):
  * `filter`, `opacity < 1` on an ancestor kill the backdrop sampling; `overflow`
@@ -50,6 +53,11 @@ const MAX_ZOOM = 8;
 const ZOOM_STEP = 1.25;
 /** One ctrl/⌘ + wheel notch. */
 const WHEEL_STEP = 1.12;
+/**
+ * The scroll stage's inner padding, in px. `fitScale` subtracts it on both
+ * sides, so this constant and the stage's `p-4` class must stay in sync.
+ */
+const STAGE_PADDING = 16;
 
 type ZoomMode = 'fit' | 'actual' | 'custom';
 
@@ -60,12 +68,27 @@ export interface WorkViewerProps {
   onClose: () => void;
 }
 
-/** A metadata chip: a tiny glass pill, never a full pane. */
-function MetaChip({ children }: { children: ReactNode }) {
+/**
+ * The header readouts as ONE aligned instrument strip: a single glass lozenge
+ * with hairline-separated segments. Four separate pills of slightly different
+ * widths read as four unrelated chips; one strip reads as a spec line, and the
+ * tabular figures line up on a shared baseline.
+ */
+function MetaStrip({ items }: { items: ReactNode[] }) {
   return (
-    <span className="liquid-glass-thin inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] tabular-nums text-studio-300">
-      <span className="relative z-[1]">{children}</span>
-    </span>
+    <div className="liquid-glass-thin inline-flex h-7 items-stretch rounded-full ring-1 ring-inset ring-studio-100/[0.05]">
+      {items.map((item, index) => (
+        <span
+          key={index}
+          className="relative inline-flex items-center px-3 text-[11px] leading-none tabular-nums text-studio-200"
+        >
+          {index > 0 && (
+            <span aria-hidden="true" className="absolute inset-y-[7px] left-0 w-px bg-studio-100/[0.14]" />
+          )}
+          {item}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -89,10 +112,10 @@ function ZoomButton({
       aria-pressed={active}
       aria-label={label}
       title={title ?? label}
-      className={`rounded-full px-2 py-1 text-[11px] leading-none transition ${
+      className={`hover-glow grid h-7 min-w-7 place-items-center rounded-full px-2 text-[11px] leading-none ${
         active
-          ? 'bg-accent/20 text-accent-soft shadow-[inset_0_1px_0_rgba(236,236,242,0.18)] ring-1 ring-inset ring-accent/40'
-          : 'text-studio-300 hover:bg-studio-100/10 hover:text-studio-100'
+          ? 'bg-gradient-to-b from-accent/30 to-accent/[0.08] text-accent-soft ring-1 ring-inset ring-accent/45 shadow-[inset_0_1px_0_rgba(236,236,242,0.28),0_6px_16px_-8px_rgba(201,162,39,0.85)]'
+          : 'text-studio-300 hover:bg-studio-100/[0.09] hover:text-studio-100 hover:shadow-[0_6px_16px_-10px_rgba(0,0,0,0.9)]'
       }`}
     >
       {children}
@@ -159,10 +182,16 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
   const busy = psd.status === 'loading' || psd.status === 'decoding';
 
   // `fitScale`: one CSS pixel per document pixel at which the whole document is
-  // visible inside the stage (minus the surface padding).
+  // visible inside the stage *including the mat margin around the print*.
+  //
+  // The subtraction must cover BOTH sides of the scroll container's padding
+  // (`STAGE_PADDING` below), plus a couple of pixels of slack: fit is computed
+  // from fractional sizes and the surface is rounded, so an exact fit can still
+  // produce a 1px overflow - and a scrollbar on a "fit" view both crops the print
+  // and covers the mat margin that sells the print-behind-glass reading.
   const fitScale = useMemo(() => {
-    const availableWidth = stage.width - 16;
-    const availableHeight = stage.height - 16;
+    const availableWidth = stage.width - STAGE_PADDING * 2 - 4;
+    const availableHeight = stage.height - STAGE_PADDING * 2 - 4;
     if (availableWidth <= 0 || availableHeight <= 0 || documentWidth <= 0 || documentHeight <= 0) return 0;
     return Math.min(availableWidth / documentWidth, availableHeight / documentHeight);
   }, [stage.width, stage.height, documentWidth, documentHeight]);
@@ -266,34 +295,47 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
             <i aria-hidden="true" className="liquid-specular" />
           </button>
 
-          <h1 className="mt-2 flex min-w-0 items-baseline gap-2 text-xl font-semibold sm:text-2xl">
-            <span className="shrink-0 font-display text-base text-studio-300 sm:text-lg">{formatDateLabel(date)}</span>
-            <span aria-hidden="true" className="text-studio-600">
-              /
+          {/* Three ranks, not two: the date is a quiet caption in the display
+              face, the filename is the page's headline, and the extension is
+              demoted so the *name* is what the eye lands on. */}
+          <h1 className="mt-2.5 flex min-w-0 items-center gap-3">
+            <span className="shrink-0 font-display text-[13px] tracking-[0.01em] text-studio-400">
+              {formatDateLabel(date)}
             </span>
-            <span className="truncate">{work.name}.psd</span>
+            <span
+              aria-hidden="true"
+              className="h-4 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-600 to-transparent"
+            />
+            <span className="truncate text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] text-studio-100">
+              {work.name}
+              <span className="font-normal text-studio-400">.psd</span>
+            </span>
           </h1>
 
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <MetaChip>{formatSize(documentWidth, documentHeight)} px</MetaChip>
-            <MetaChip>{formatMegapixels(documentWidth, documentHeight)}</MetaChip>
-            <MetaChip>{work.layerCount} 个图层</MetaChip>
-            <MetaChip>{formatBytes(work.bytes)}</MetaChip>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <MetaStrip
+              items={[
+                `${formatSize(documentWidth, documentHeight)} px`,
+                formatMegapixels(documentWidth, documentHeight),
+                `${work.layerCount} 个图层`,
+                formatBytes(work.bytes),
+              ]}
+            />
           </div>
         </div>
 
         {/* The ONE primary CTA on this page: gold fill + the rotating rim
             highlight. Nothing else on the page may use `liquid-rim`.
-            `overflow-hidden` is load-bearing: `liquid-rim` animates
-            `transform: rotate()` on its ::before, which rotates that box, so on
-            a wide button the masked ring swings well outside the button unless
-            the button clips to its own rounded box. It is safe here - no glass
-            surface is a descendant of the CTA. */}
+            No `overflow-hidden` here any more: `liquid-rim` now interpolates the
+            conic gradient's start angle via a registered `@property` instead of
+            rotating its ::before box, so nothing swings outside the button and
+            clipping would only shave the 1px ring that hugs the edge. It stays
+            safe either way - no glass surface is a descendant of the CTA. */}
         <a
           data-testid="download-psd"
           href={work.psd}
           download={`${date}-${work.name}.psd`}
-          className="liquid-cta liquid-rim inline-flex shrink-0 items-center gap-2 overflow-hidden rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:brightness-[1.08] active:scale-[0.98]"
+          className="liquid-cta liquid-rim inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:brightness-[1.08] active:scale-[0.98]"
         >
           <span className="relative z-[1] inline-flex items-center gap-2">
             <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
@@ -328,11 +370,15 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                 onDoubleClick={toggleFitAndActual}
                 onKeyDown={onStageKeyDown}
                 style={{ height: 'clamp(20rem, 62vh, 48rem)' }}
-                className="relative overflow-auto overscroll-contain rounded-[14px] border border-studio-100/10 bg-studio-950/70 ring-1 ring-inset ring-studio-100/[0.14] shadow-[inset_0_2px_18px_-6px_rgba(0,0,0,0.9)]"
+                className="artwork-mat relative overflow-auto overscroll-contain rounded-[14px]"
               >
-                <div className="flex min-h-full min-w-full p-3">
+                <div className="flex min-h-full min-w-full p-4">
+                  {/* The print: a crisp mounted sheet on the mat. The 1px ring
+                      is the paper edge catching the pane's light; the contact
+                      shadow only appears *outside* the print, so 1:1 inspection
+                      stays untouched. */}
                   <div
-                    className="checkerboard relative m-auto shrink-0 rounded-lg ring-1 ring-studio-100/10"
+                    className="checkerboard relative m-auto shrink-0 rounded-[3px] ring-1 ring-studio-100/[0.18] shadow-[0_26px_50px_-26px_rgba(0,0,0,0.95),0_5px_14px_-8px_rgba(0,0,0,0.8)]"
                     style={surfaceStyle}
                   >
                     {preview.display && (
@@ -355,31 +401,54 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
                         frame ? 'scale-100 opacity-100' : 'scale-[1.035] opacity-0'
                       }`}
                     />
-                    {/* Glass-over-artwork, the two parts that do not cost the
-                        1:1 view anything: a soft vignette for depth, and a faint
-                        diagonal reflection streak across the top of the image
-                        area. Both are pointer-transparent and purely decorative. */}
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-0 rounded-lg shadow-[inset_0_0_0_1px_rgba(236,236,242,0.08),inset_0_0_90px_rgba(0,0,0,0.45)]"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-0 rounded-lg bg-[linear-gradient(112deg,rgba(236,236,242,0.16)_0%,rgba(236,236,242,0.05)_20%,transparent_40%)]"
-                    />
                   </div>
                 </div>
               </div>
+
+              {/* Mat light. `artwork-mat` is deliberately near-black so the print
+                  has maximum contrast, but an evenly black field reads as a hole
+                  rather than as a surface. One pool of light in the lit corner -
+                  screen-blended, so it lifts the mat and leaves the print
+                  untouched - gives the surface a direction. Kept low: the
+                  reflection band is the feature, this is only its ambient. */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-[14px] mix-blend-screen bg-[radial-gradient(125%_100%_at_4%_-16%,rgba(143,208,232,0.075),rgba(236,236,242,0.02)_40%,transparent_62%)]"
+              />
+
+              {/* The reflection. ONE band, at ~45° so it reads as a sheet of glass
+                  rather than as a vertical smear, positioned over the lit
+                  corner of the sheet - the only place a reflection can actually
+                  be seen, because `screen` blending adds light on the dark mat
+                  and is a near no-op on the bright print. So it costs the 1:1
+                  view nothing, and the print stays the brightest thing here. */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-[14px] mix-blend-screen bg-[linear-gradient(134deg,transparent_0%,rgba(236,236,242,0.04)_5%,rgba(143,208,232,0.17)_10%,rgba(236,236,242,0.045)_15%,transparent_21%)]"
+              />
             </LiquidGlass>
 
             {/* Live/preview state, floating over the artwork: real glass, so its
-                backdrop is the canvas itself. */}
+                backdrop is the canvas itself. `liquid-glass-thin` alone (no
+                `elevate`) is deliberate - both utilities set `box-shadow`, so
+                elevate's generic shadow would overwrite the pane's own bevel,
+                which is exactly the rim light that makes a small lozenge read as
+                frosted rather than as a flat chip. */}
             <div className="pointer-events-none absolute left-3 top-3 z-10">
-              <div className="liquid-glass-thin liquid-elevate liquid-interactive pointer-events-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] text-studio-300">
+              <div className="liquid-glass-thin liquid-interactive pointer-events-auto inline-flex h-7 items-center gap-2 overflow-hidden rounded-full pl-2.5 pr-3 text-[10px] leading-none tracking-wide text-studio-200 ring-1 ring-inset ring-studio-100/[0.10]">
+                {/* Front-face light: over the mat there is nothing to blur, so the
+                    lozenge has to carry its own light or it reads as a flat chip.
+                    `overflow-hidden` clips it to the pill; no glass inside. */}
+                <i
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(236,236,242,0.12),rgba(236,236,242,0.02)_58%,transparent)]"
+                />
                 <span
                   aria-hidden="true"
                   className={`relative z-[1] h-1.5 w-1.5 rounded-full ${
-                    frame ? 'bg-accent shadow-[0_0_8px_rgba(201,162,39,0.8)]' : 'bg-studio-400'
+                    frame
+                      ? 'bg-accent shadow-[0_0_8px_rgba(201,162,39,0.9)]'
+                      : 'bg-studio-400 shadow-[0_0_6px_rgba(0,0,0,0.8)]'
                   }`}
                 />
                 <span className="relative z-[1]">{frame ? '在线合成' : '预览图'}</span>
@@ -388,18 +457,23 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
             </div>
 
             <div className="pointer-events-none absolute bottom-3 right-3 z-30">
-              <div className="liquid-glass-thin liquid-elevate liquid-interactive pointer-events-auto flex items-center gap-1 rounded-full p-1.5">
+              <div className="liquid-glass-thin liquid-interactive pointer-events-auto flex items-center gap-0.5 rounded-full p-1 ring-1 ring-inset ring-studio-100/[0.07]">
                 <ZoomButton active={zoomMode === 'fit'} onClick={fitToWindow} label="适应窗口" title="适应窗口（快捷键 0）">
                   适应窗口
                 </ZoomButton>
                 <ZoomButton active={zoomMode === 'actual'} onClick={actualSize} label="实际像素 100%" title="实际像素 100%（快捷键 1）">
                   100%
                 </ZoomButton>
-                <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-studio-600/70" />
+                <span
+                  aria-hidden="true"
+                  className="mx-1 h-5 w-px shrink-0 bg-gradient-to-b from-transparent via-studio-100/25 to-transparent"
+                />
                 <ZoomButton onClick={() => zoomBy(1 / ZOOM_STEP)} label="缩小" title="缩小（快捷键 -）">
                   −
                 </ZoomButton>
-                <span className="min-w-[3.2rem] text-center text-[11px] tabular-nums text-studio-300">{formatScale(scale)}</span>
+                <span className="min-w-[3.4rem] px-0.5 text-center text-[12.5px] font-medium leading-none tabular-nums text-studio-100">
+                  {formatScale(scale)}
+                </span>
                 <ZoomButton onClick={() => zoomBy(ZOOM_STEP)} label="放大" title="放大（快捷键 +）">
                   +
                 </ZoomButton>
@@ -451,15 +525,28 @@ export function WorkViewer({ date, work, onClose }: WorkViewerProps) {
           )}
 
           {allCaveats && (
-            <LiquidGlass variant="pane" className="p-3.5">
+            <LiquidGlass variant="pane" className="p-4">
               <div>
-                <h2 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-studio-100">
-                  <span aria-hidden="true" className="h-3 w-0.5 rounded-full bg-ember" />
+                <h2 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-studio-100">
+                  <span
+                    aria-hidden="true"
+                    className="h-3 w-0.5 rounded-full bg-gradient-to-b from-ember to-accent/30"
+                  />
                   关于在线合成
+                  <span className="rounded-full border border-studio-100/10 px-1.5 py-px text-[9px] font-normal tabular-nums text-studio-400">
+                    {caveats.length} 条
+                  </span>
                 </h2>
-                <ul className="list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-studio-300">
+                {/* Engraved-into-glass hairline rather than a border: a hard 1px
+                    rule under a label on a translucent pane looks like a table
+                    cell edge. */}
+                <div aria-hidden="true" className="glass-divider mt-2.5" />
+                <ul className="mt-2.5 space-y-1.5 text-[11px] leading-relaxed text-studio-300">
                   {caveats.map((caveat) => (
-                    <li key={caveat}>{caveat}</li>
+                    <li key={caveat} className="flex gap-2">
+                      <span aria-hidden="true" className="mt-[7px] h-px w-2.5 shrink-0 bg-ice/45" />
+                      <span className="min-w-0">{caveat}</span>
+                    </li>
                   ))}
                 </ul>
               </div>

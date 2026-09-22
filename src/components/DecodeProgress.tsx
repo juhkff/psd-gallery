@@ -8,9 +8,13 @@
  *
  *  - `progress > 0` -> a determinate bar whose fill is the worker's fraction,
  *    over a ruler of tick marks sized by the document's real layer count, with a
- *    specular head marking the leading edge of the light.
+ *    light head (halo + core + trail) marking the leading edge.
  *  - `progress === 0` -> an honestly indeterminate shimmer (`shimmer-line`),
  *    with no `aria-valuenow` claimed.
+ *  - the phase rail shows only the two phases the worker actually sets
+ *    (`status`: loading -> decoding). Exactly one is marked current, with shape
+ *    as well as colour: done = check in a filled node, current = pulsing core
+ *    behind a lit ring, upcoming = hollow node.
  *  - the only other number on screen is elapsed wall time and the real
  *    document/layer counts from the manifest.
  *
@@ -49,6 +53,25 @@ function LocalIcon() {
       <path d="M4.5 7V5.4a3.5 3.5 0 0 1 7 0V7" />
       <rect x="3" y="7" width="10" height="6.2" rx="1.4" />
     </svg>
+  );
+}
+
+type PhaseState = 'done' | 'current' | 'todo';
+
+/** Shape carries the state: check / pulsing core / hollow dot. */
+function PhaseMark({ state }: { state: PhaseState }) {
+  if (state === 'done') {
+    return (
+      <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M2.4 6.3 4.7 8.6 9.6 3.5" />
+      </svg>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={`rounded-full ${state === 'current' ? 'h-1.5 w-1.5 animate-pulse bg-accent-soft' : 'h-1 w-1 bg-studio-600'}`}
+    />
   );
 }
 
@@ -117,8 +140,9 @@ export function DecodeProgress({
             )}
           </div>
 
-          {/* Light moving through glass: tick ruler first, then the worker's real
-              fraction on top, with a specular head at the leading edge. */}
+          {/* Light travelling along a fibre: a recessed track carrying the tick
+              ruler, then the worker's real fraction on top with a travelling
+              head - a soft halo, a hard core, and a short trail behind it. */}
           <div
             role="progressbar"
             aria-label="PSD 解码进度"
@@ -126,57 +150,98 @@ export function DecodeProgress({
             aria-valuemax={100}
             aria-valuenow={hasFraction ? Math.round(progress * 100) : undefined}
             aria-valuetext={hasFraction ? undefined : '正在解码，进度未知'}
-            className="relative mt-2.5 h-2 overflow-hidden rounded-full bg-studio-950/70 ring-1 ring-inset ring-studio-100/10"
+            className="relative mt-3 h-2.5 overflow-hidden rounded-full bg-studio-950/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-studio-100/10"
           >
-            <span aria-hidden="true" className="absolute inset-0 flex items-stretch justify-between px-px opacity-70">
+            {/* Tick ruler: an honest density cue from the real layer count, kept
+                at low contrast so it never competes with the travelling light -
+                at higher opacity it reads as a barcode instead of a fibre. */}
+            <span aria-hidden="true" className="absolute inset-0 flex items-stretch justify-between px-px opacity-45">
               {Array.from({ length: tickCount }, (_, index) => (
-                <span key={index} className="w-px bg-studio-100/20" />
+                <span key={index} className="w-px bg-studio-100/[0.16]" />
               ))}
             </span>
             {hasFraction ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ember via-accent to-accent-soft shadow-[0_0_14px_-2px_rgba(201,162,39,0.9)] transition-[width] duration-300 ease-out"
+                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ember via-accent to-accent-soft shadow-[0_0_16px_-2px_rgba(201,162,39,0.9)] transition-[width] duration-300 ease-out"
                 style={{ width: `${Math.max(1.5, progress * 100)}%` }}
               >
                 <span className="absolute inset-0 overflow-hidden rounded-full">
-                  <span className="shimmer-line absolute inset-0 opacity-60" />
+                  <span className="shimmer-line absolute inset-0 opacity-70" />
                 </span>
-                <span className="absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 translate-x-1/2 rounded-full bg-studio-100 shadow-[0_0_12px_4px_rgba(236,236,242,0.55)]" />
+                <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2">
+                  <span className="absolute right-0 top-1/2 h-1 w-10 -translate-y-1/2 bg-gradient-to-l from-studio-100/70 to-transparent blur-[1px]" />
+                  <span className="absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-studio-100/60 blur-[3px]" />
+                  <span className="absolute right-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 translate-x-1/2 rounded-full bg-studio-100 shadow-[0_0_10px_3px_rgba(236,236,242,0.6)]" />
+                </span>
               </span>
             ) : (
               <span aria-hidden="true" className="shimmer-line absolute inset-0" />
             )}
           </div>
 
-          <ol className="mt-2.5 flex items-center gap-2 text-[10px] text-studio-400">
-            {PHASES.map((label, index) => (
-              <li key={label} className="flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className={`h-1 w-1 rounded-full ${
-                    index < phaseIndex ? 'bg-accent' : index === phaseIndex ? 'animate-pulse bg-accent' : 'bg-studio-600'
-                  }`}
-                />
-                <span
-                  className={`liquid-glass-thin inline-flex items-center rounded-full px-1.5 py-px ${
-                    index <= phaseIndex ? 'text-studio-200' : 'text-studio-400'
-                  }`}
+          {/* The phase rail: exactly one node is current, and the connector
+              behind it is lit - so "where am I" is readable without reading. */}
+          <ol className="mt-2.5 flex items-center text-[10px]">
+            {PHASES.map((label, index) => {
+              const state: PhaseState = index < phaseIndex ? 'done' : index === phaseIndex ? 'current' : 'todo';
+              return (
+                <li
+                  key={label}
+                  aria-current={state === 'current' ? 'step' : undefined}
+                  className="flex items-center"
                 >
-                  <span className="relative z-[1]">{label}</span>
-                </span>
-                {index < PHASES.length - 1 && <span aria-hidden="true" className="h-px w-4 bg-studio-100/15" />}
-              </li>
-            ))}
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 ${
+                      state === 'current' ? 'bg-accent/[0.12] ring-1 ring-inset ring-accent/30' : ''
+                    }`}
+                  >
+                    <span
+                      className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
+                        state === 'done'
+                          ? 'border-accent/45 bg-accent/20 text-accent-soft'
+                          : state === 'current'
+                            ? 'border-accent/60 bg-accent/15 text-accent-soft shadow-[0_0_10px_-1px_rgba(201,162,39,0.85)]'
+                            : 'border-studio-100/[0.14] bg-studio-950/40 text-studio-600'
+                      }`}
+                    >
+                      <PhaseMark state={state} />
+                    </span>
+                    <span
+                      className={
+                        state === 'current'
+                          ? 'font-medium text-studio-100'
+                          : state === 'done'
+                            ? 'text-studio-300'
+                            : 'text-studio-400'
+                      }
+                    >
+                      {label}
+                    </span>
+                  </span>
+                  {index < PHASES.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className={`mx-1.5 h-px w-6 ${state === 'done' ? 'bg-accent/45' : 'bg-studio-100/[0.14]'}`}
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ol>
 
-          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-studio-400">
-            <span className="inline-flex items-center gap-1 text-studio-300">
+          <div aria-hidden="true" className="glass-divider mt-2.5" />
+
+          {/* The card can sit over a bright print, and the artwork shows through
+              the glass tint: the meta line is one step brighter than the usual
+              micro-label so it stays readable on the lightest backdrop. */}
+          <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-studio-300">
+            <span className="inline-flex items-center gap-1">
               <LocalIcon />
               本地浏览器解码
             </span>
             <MetaDot />
-            <span className="tabular-nums text-studio-300">{formatElapsed(elapsedMs)}</span>
+            <span className="tabular-nums">{formatElapsed(elapsedMs)}</span>
             {layerCount > 0 && (
               <>
                 <MetaDot />
