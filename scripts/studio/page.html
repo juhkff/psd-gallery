@@ -5,19 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <title>图库管理端 · 上传 PSD</title>
+<!-- Inline data-URI icon: no external asset, and it stops the browser's
+     unconditional /favicon.ico request from 404-ing in the console. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d0d14'/%3E%3Crect x='7.5' y='7.5' width='17' height='17' rx='4.5' fill='none' stroke='%23e6c65c' stroke-width='2'/%3E%3C/svg%3E" />
 <style>
   /* ------------------------------------------------------------------ *
    * LIQUID GLASS - local studio edition.
    *
    * This page is a standalone file with no build step, so the gallery's
-   * design tokens (src/index.css) are mirrored here BY HAND. Keep the two in
-   * sync: the studio must read as the same product as the gallery.
+   * design tokens and utilities (src/index.css) are mirrored here BY HAND.
+   * Keep the two in sync: the studio must read as the same product as the
+   * gallery.
+   *
+   * Mirrored from the design system in this pass:
+   *   studio-backdrop   -> .ambient (five colour pools)
+   *   liquid-glass      -> .panel
+   *   liquid-glass-thin -> li.item
+   *   liquid-sheen      -> .sheen
+   *   liquid-cta / liquid-rim -> button.primary
+   *   artwork-mat       -> .mat (thumbnail wells, PSD tiles, #drop)
+   *   glass-divider     -> .glass-divider
+   *
+   * Hierarchy rule for this page: GOLD IS THE PUBLISH BUTTON. Ice/ion carry
+   * everything else (drop zone, section dots, eyebrows), and the gold rim
+   * appears in exactly one place, so 「发布」 is the only primary action on
+   * screen. Transient states (hover, drag-over) may borrow gold because they
+   * are not competing at rest.
    *
    * The one rule that keeps the glass from silently dying:
    *   never put transform / filter / backdrop-filter / opacity < 1 /
    *   overflow: hidden on an ANCESTOR of a pane. Clip the sheen with
-   *   border-radius on the sheen layer itself instead.
+   *   border-radius on the sheen layer itself instead. That is also why the
+   *   hover states below animate box-shadow/border, never transform.
    * ------------------------------------------------------------------ */
+  /* The CTA rim is a conic gradient whose ANGLE is animated, not a rotated
+     element. Rotating a 1px masked ring only looks right on a circle: on a
+     pill (wider than tall) the rotated ring swings outside the button and
+     paints a stray arc across the page. Registering the angle lets the
+     highlight travel around a rim that never leaves the outline. */
+  @property --rim-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
   :root {
     --s950: #06060a; --s900: #0d0d14; --s850: #12121a; --s800: #17171f;
     --s700: #23232e; --s600: #353542; --s400: #6b6b7a; --s300: #b9b9c6;
@@ -25,9 +56,14 @@
     --accent: #c9a227; --accent-soft: #e6c65c; --ember: #b45f3f;
     --ion: #7c6bd4; --ice: #8fd0e8;
     --ok: #63b37a; --bad: #d9645f;
+    /* Same stack as the gallery's timeline headings, so an archived date in
+       the studio is typeset like the date in the deployed gallery. */
+    --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Songti SC', 'Noto Serif SC', ui-serif, Georgia, serif;
 
     --sheen: liquid-sweep 9s ease-in-out infinite;
     --rim: rim-spin 6s linear infinite;
+    --drift: drift 34s ease-in-out infinite alternate;
+    --pulse: pulse-ring 4.2s ease-out infinite;
   }
   * { box-sizing: border-box; }
   html { color-scheme: dark; scroll-behavior: smooth; }
@@ -41,18 +77,33 @@
     overflow-x: clip;
   }
 
-  /* --- ambient light pools (fixed, so the panes always have something to refract) */
+  /* --- ambient light pools -------------------------------------------
+     Fixed, so the panes always have something to refract. Liquid glass only
+     reads as glass when there is real light behind it: on a flat near-black
+     page every pane is just a dark rectangle. Mirrors `studio-backdrop`
+     (accent 26 / ion 30 / ember 24 / ice 16 / ion 14). */
   .ambient {
-    position: fixed; inset: 0; pointer-events: none;
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden;
     background-color: var(--s950);
     background-image:
-      radial-gradient(58rem 38rem at 10% -12%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 68%),
-      radial-gradient(46rem 34rem at 92% 4%, color-mix(in oklab, var(--ion) 20%, transparent), transparent 70%),
-      radial-gradient(40rem 30rem at 48% 112%, color-mix(in oklab, var(--ember) 16%, transparent), transparent 72%),
-      radial-gradient(30rem 24rem at 78% 62%, color-mix(in oklab, var(--ice) 9%, transparent), transparent 70%);
+      radial-gradient(58rem 38rem at 8% -14%, color-mix(in oklab, var(--accent) 26%, transparent), transparent 66%),
+      radial-gradient(46rem 34rem at 94% 2%, color-mix(in oklab, var(--ion) 30%, transparent), transparent 68%),
+      radial-gradient(42rem 32rem at 46% 114%, color-mix(in oklab, var(--ember) 24%, transparent), transparent 70%),
+      radial-gradient(34rem 26rem at 76% 58%, color-mix(in oklab, var(--ice) 16%, transparent), transparent 68%),
+      radial-gradient(24rem 18rem at 22% 46%, color-mix(in oklab, var(--ion) 14%, transparent), transparent 70%);
+  }
+  /* Second, slower layer: the light behind the glass breathes instead of
+     sitting still. Sibling of the panes, never an ancestor - an animated
+     ancestor would break their backdrop-filter. */
+  .ambient::after {
+    content: ''; position: absolute; inset: -6%;
+    opacity: .55; animation: var(--drift);
+    background-image:
+      radial-gradient(40rem 30rem at 30% 18%, color-mix(in oklab, var(--accent) 13%, transparent), transparent 72%),
+      radial-gradient(34rem 26rem at 72% 74%, color-mix(in oklab, var(--ion) 15%, transparent), transparent 72%);
   }
 
-  .wrap { position: relative; max-width: 1080px; margin: 0 auto; padding: 34px 20px 72px; }
+  .wrap { position: relative; max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
 
   :focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 2px; border-radius: 6px; }
   ::selection { background: color-mix(in oklab, var(--accent) 38%, transparent); color: var(--s100); }
@@ -64,8 +115,43 @@
   ::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--accent) 45%, transparent); background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
 
+  /* --- shared primitives --------------------------------------------- */
+  /* The gallery's glowing accent dot, used to mark every designed head. */
+  .dot {
+    width: 6px; height: 6px; flex: none; border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 78%, transparent);
+  }
+  .dot.ice { background: var(--ice); box-shadow: 0 0 10px color-mix(in oklab, var(--ice) 70%, transparent); }
+
+  /* glass-divider: a hairline that fades in from the left, brightens with an
+     ice tint under the label and dies out - engraved into the glass rather
+     than drawn on top of it. (Mirrors the design system 1:1.) */
+  .glass-divider {
+    display: block; height: 1px;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--s100) 22%, transparent) 12%,
+      color-mix(in oklab, var(--ice) 26%, transparent) 34%,
+      color-mix(in oklab, var(--s100) 8%, transparent) 62%,
+      transparent
+    );
+  }
+
+  /* artwork-mat: the recessed well an artwork sits in. Dark, inset, with the
+     shadow falling inward from the frame edge, a 1px inner ring and a 1px
+     highlight underneath. (Mirrors `artwork-mat`.) */
+  .mat {
+    background-color: color-mix(in oklab, var(--s950) 72%, transparent);
+    box-shadow:
+      inset 0 2px 14px -4px rgb(0 0 0 / .95),
+      inset 0 0 0 1px color-mix(in oklab, var(--s100) 7%, transparent),
+      0 1px 0 0 color-mix(in oklab, var(--s100) 10%, transparent);
+  }
+
   /* --- masthead ------------------------------------------------------ */
-  .masthead { padding: 2px 2px 26px; }
+  .masthead { padding: 0 2px 30px; }
   .eyebrow {
     display: flex; align-items: center; gap: 9px;
     margin: 0 0 10px; font-size: 11px; font-weight: 600;
@@ -77,7 +163,7 @@
     background: linear-gradient(90deg, transparent, var(--accent-soft));
   }
   h1 {
-    margin: 0 0 8px; font-size: 27px; line-height: 1.25; letter-spacing: .01em;
+    margin: 0 0 8px; font-size: 28px; line-height: 1.22; letter-spacing: .01em;
     background-image: linear-gradient(100deg, var(--s100), var(--ice) 55%, var(--ion));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
@@ -94,55 +180,79 @@
   .pill.ion i { background: var(--ion); box-shadow: 0 0 8px var(--ion); }
   .pill.ice i { background: var(--ice); box-shadow: 0 0 8px var(--ice); }
 
-  /* --- glass panes --------------------------------------------------- */
+  /* --- the primary pane: liquid-glass, mirrored from src/index.css ----- */
   .panel {
     position: relative; isolation: isolate;
-    padding: 20px;
-    border-radius: 20px;
-    border: 1px solid color-mix(in oklab, var(--s100) 12%, transparent);
-    background-color: color-mix(in oklab, var(--s900) 62%, transparent);
+    padding: 18px 20px 20px;
+    border-radius: 22px;
+    border: 1px solid color-mix(in oklab, var(--s100) 20%, transparent);
+    background-color: color-mix(in oklab, var(--s850) 52%, transparent);
     background-image:
-      linear-gradient(165deg, color-mix(in oklab, var(--s100) 7%, transparent), transparent 42%),
-      radial-gradient(120% 80% at 12% -10%, color-mix(in oklab, var(--ice) 9%, transparent), transparent 60%);
-    backdrop-filter: blur(18px) saturate(165%);
-    -webkit-backdrop-filter: blur(18px) saturate(165%);
+      /* front-face light, angled like a real sheet */
+      linear-gradient(
+        168deg,
+        color-mix(in oklab, var(--s100) 13%, transparent),
+        color-mix(in oklab, var(--s100) 3%, transparent) 36%,
+        transparent 66%
+      ),
+      /* chromatic fringing: cool at the lit corner, warm at the shaded one */
+      radial-gradient(120% 85% at 10% -16%, color-mix(in oklab, var(--ice) 20%, transparent), transparent 56%),
+      radial-gradient(85% 70% at 94% 110%, color-mix(in oklab, var(--ion) 18%, transparent), transparent 60%),
+      radial-gradient(70% 50% at 78% -10%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 62%);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
     box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 22%, transparent),
-      inset 0 -1px 0 0 color-mix(in oklab, black 45%, transparent),
-      inset 0 0 40px -18px color-mix(in oklab, var(--ice) 40%, transparent),
-      0 10px 34px -14px rgb(0 0 0 / .7);
+      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 42%, transparent),
+      inset 0 -1px 0 0 color-mix(in oklab, black 60%, transparent),
+      inset 0 0 70px -22px color-mix(in oklab, var(--ice) 55%, transparent),
+      0 26px 70px -24px rgb(0 0 0 / .9),
+      0 8px 22px -12px rgb(0 0 0 / .75);
   }
   /* Content must paint above the sheen (z 3). */
   .pane-body { position: relative; z-index: 1; }
 
   /* Slow moving film. Absolute child clipped by ITS OWN border-radius -
      putting overflow:hidden on the pane would create a paint container and
-     break the pane's backdrop-filter. */
+     break the pane's backdrop-filter. Mirrors `liquid-sheen`. */
   .sheen {
     position: absolute; inset: 0; z-index: 3; pointer-events: none;
     border-radius: inherit; overflow: hidden;
-    mix-blend-mode: screen; opacity: .75;
+    mix-blend-mode: screen; opacity: .9;
   }
   .sheen::before {
-    content: ''; position: absolute; top: -60%; left: -40%; width: 55%; height: 220%;
+    content: ''; position: absolute; top: -60%; left: -40%; width: 58%; height: 220%;
     background: linear-gradient(
       100deg,
       transparent,
-      color-mix(in oklab, var(--s100) 12%, transparent) 42%,
-      color-mix(in oklab, var(--ice) 16%, transparent) 55%,
+      color-mix(in oklab, var(--s100) 16%, transparent) 40%,
+      color-mix(in oklab, var(--ice) 22%, transparent) 54%,
       transparent
     );
-    filter: blur(6px);
+    filter: blur(7px);
     animation: var(--sheen);
+  }
+
+  /* Panel head: same language as a section head (dot + caps label + right
+     tail) one step stronger, so the upload job outranks the two lists. */
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 12px; }
+  .panel-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--accent-soft);
+  }
+  .panel-tail {
+    margin-left: auto; font-size: 11px; letter-spacing: .08em; color: var(--s300);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
   }
 
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .grow { flex: 1 1 auto; min-width: 0; }
   label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--s300); letter-spacing: .02em; }
+  .fields { align-items: flex-end; margin-top: 16px; }
 
   input[type=date] {
     font: inherit; color: var(--s100); color-scheme: dark;
-    padding: 9px 11px; border-radius: 11px;
+    font-variant-numeric: tabular-nums;
+    padding: 10px 12px; border-radius: 12px;
     border: 1px solid color-mix(in oklab, var(--s100) 13%, transparent);
     background: color-mix(in oklab, var(--s850) 70%, transparent);
     box-shadow:
@@ -151,13 +261,13 @@
       0 6px 18px -14px rgb(0 0 0 / .8);
     transition: border-color .2s, box-shadow .2s;
   }
-  input[type=date]:hover { border-color: color-mix(in oklab, var(--accent) 40%, transparent); }
-  input[type=date]:focus { border-color: color-mix(in oklab, var(--accent) 65%, transparent); outline: none; }
+  input[type=date]:hover { border-color: color-mix(in oklab, var(--ice) 45%, transparent); }
+  input[type=date]:focus { border-color: color-mix(in oklab, var(--ice) 70%, transparent); outline: none; }
 
   /* --- buttons ------------------------------------------------------- */
   button {
     font: inherit; cursor: pointer; color: var(--s100);
-    padding: 9px 18px; border-radius: 999px;
+    padding: 10px 18px; border-radius: 999px;
     border: 1px solid color-mix(in oklab, var(--s100) 13%, transparent);
     background-color: color-mix(in oklab, var(--s800) 72%, transparent);
     background-image: linear-gradient(180deg, color-mix(in oklab, var(--s100) 7%, transparent), transparent 65%);
@@ -167,35 +277,60 @@
       0 8px 20px -14px rgb(0 0 0 / .85);
     transition: border-color .2s, color .2s, box-shadow .25s, background-color .2s, filter .2s;
   }
+  /* Secondary actions hover ICE, not gold: gold belongs to 发布 alone. */
   button:hover:not(:disabled) {
-    border-color: color-mix(in oklab, var(--accent) 55%, transparent);
-    color: var(--accent-soft);
+    border-color: color-mix(in oklab, var(--ice) 50%, transparent);
+    color: var(--s100);
     box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, var(--accent-soft) 35%, transparent),
+      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 26%, transparent),
       0 12px 26px -14px rgb(0 0 0 / .9),
-      0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent);
+      0 0 0 1px color-mix(in oklab, var(--ice) 18%, transparent);
   }
   button:active:not(:disabled) { box-shadow: inset 0 2px 6px -2px rgb(0 0 0 / .8); }
-  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:disabled { cursor: not-allowed; }
 
-  /* The ONE primary CTA: gold fill + a rotating conic rim masked to a 1px ring. */
+  /* Tertiary: 刷新. A ghost so it never competes with the CTA. */
+  button.ghost {
+    padding: 9px 15px; font-size: 13px; color: var(--s300);
+    border-color: color-mix(in oklab, var(--s100) 10%, transparent);
+    background-color: transparent; background-image: none; box-shadow: none;
+  }
+  button.ghost:hover:not(:disabled) {
+    color: var(--s100); border-color: color-mix(in oklab, var(--ice) 40%, transparent);
+    background-color: color-mix(in oklab, var(--s100) 5%, transparent); box-shadow: none;
+  }
+  button.ghost:disabled { opacity: .5; }
+
+  /* The ONE primary CTA: gold fill + a rotating conic rim masked to a 1px
+     ring. Mirrors `liquid-cta` + `liquid-rim`. */
   button.primary {
     position: relative; isolation: isolate;
-    border: none; color: #17120a; font-weight: 600; padding: 10px 22px;
+    border: none; color: #17120a; font-weight: 700; font-size: 14px;
+    padding: 12px 26px; letter-spacing: .01em;
     background-image: linear-gradient(100deg, var(--accent-soft), var(--accent) 48%, var(--ember));
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / .45),
       inset 0 -2px 6px -2px rgb(120 60 20 / .55),
-      0 12px 30px -12px color-mix(in oklab, var(--accent) 70%, transparent);
+      0 14px 34px -12px color-mix(in oklab, var(--accent) 70%, transparent);
   }
   button.primary::before {
-    content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+    /* A 2px band hugging the outside of the pill: the light travels around the
+       button instead of rotating the button's outline. */
+    content: ''; position: absolute; inset: -2px; border-radius: inherit; padding: 2px;
+    /* Fallback for browsers without @property: a static rim at 0deg. Where the
+       angle IS registered, the animation below overrides this declaration
+       (animations outrank normal author declarations). */
+    --rim-angle: 0deg;
+    /* Cool glint on purpose: a gold arc on a gold fill is invisible, so the
+       travelling highlight is white -> ice, which reads against both the
+       button and the dark page. Keep the lit arc narrow (~110deg): a wide one
+       looks like a permanent rim instead of a highlight passing through. */
     background: conic-gradient(
-      from 0deg,
+      from var(--rim-angle),
       transparent 0deg,
-      color-mix(in oklab, var(--accent-soft) 85%, transparent) 60deg,
-      color-mix(in oklab, var(--ice) 70%, transparent) 130deg,
-      transparent 200deg,
+      color-mix(in oklab, var(--s100) 90%, transparent) 28deg,
+      color-mix(in oklab, var(--ice) 95%, transparent) 64deg,
+      transparent 110deg,
       transparent 360deg
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -205,52 +340,120 @@
     animation: var(--rim);
     pointer-events: none;
   }
-  button.primary:hover:not(:disabled) { color: #17120a; filter: brightness(1.06); }
-  button.primary:disabled::before { animation: none; }
-
-  /* --- drop zone ----------------------------------------------------- */
-  #drop {
-    position: relative; margin-top: 18px; padding: 34px 18px;
-    text-align: center; cursor: pointer; border-radius: 16px;
-    border: 1.5px dashed color-mix(in oklab, var(--s100) 18%, transparent);
-    background-color: color-mix(in oklab, var(--s850) 55%, transparent);
-    background-image:
-      linear-gradient(180deg, color-mix(in oklab, var(--s100) 4%, transparent), transparent 62%),
-      radial-gradient(90% 120% at 50% -30%, color-mix(in oklab, var(--ice) 8%, transparent), transparent 60%);
+  button.primary:hover:not(:disabled) { color: #17120a; filter: brightness(1.06); border-color: transparent; }
+  /* Nothing to publish yet: drain the gold so the page has no false focal
+     point, and drop the rim with it. */
+  button.primary:disabled {
+    background-image: none;
+    background-color: color-mix(in oklab, var(--s800) 60%, transparent);
+    /* 70%, not 55%: a disabled control is exempt from 4.5:1, but the label
+       still has to be readable - at 55% it measured 3.7:1 worst case. */
+    color: color-mix(in oklab, var(--s100) 70%, transparent);
+    border: 1px solid color-mix(in oklab, var(--s100) 12%, transparent);
     box-shadow:
       inset 0 1px 0 0 color-mix(in oklab, var(--s100) 12%, transparent),
-      inset 0 0 34px -18px color-mix(in oklab, var(--ice) 45%, transparent);
-    transition: border-color .22s, background-color .25s, box-shadow .25s, color .22s;
+      0 8px 20px -16px rgb(0 0 0 / .9);
+  }
+  button.primary:disabled::before { display: none; }
+  /* The note only exists while the CTA is unusable - pure CSS off the
+     `disabled` attribute, so no script has to know about it. */
+  .cta-note { display: none; font-size: 12px; color: var(--s300); }
+  .actions:has(#publish[disabled]) .cta-note { display: inline; }
+
+  /* --- drop zone: the focal point ------------------------------------
+     A recessed artwork-mat well, so the target reads as a slot cut into the
+     glass. Gold is not used at rest - only while a file is actually over it. */
+  #drop {
+    position: relative; margin: 16px 0 0; padding: 30px 22px 26px;
+    text-align: center; cursor: pointer; border-radius: 18px;
+    border: 1px dashed color-mix(in oklab, var(--s100) 24%, transparent);
+    background-color: color-mix(in oklab, var(--s950) 66%, transparent);
+    background-image:
+      radial-gradient(130% 90% at 50% -20%, color-mix(in oklab, var(--ice) 13%, transparent), transparent 62%),
+      linear-gradient(180deg, color-mix(in oklab, var(--s100) 5%, transparent), transparent 55%);
+    /* mat: shadow falls inward + 1px highlight underneath (no inner ring -
+       the dashed border already is that edge, a second one looks machined-wrong) */
+    box-shadow:
+      inset 0 2px 16px -6px rgb(0 0 0 / .95),
+      inset 0 0 60px -26px color-mix(in oklab, var(--ice) 60%, transparent),
+      0 1px 0 0 color-mix(in oklab, var(--s100) 10%, transparent);
+    transition: border-color .22s, background-color .25s, box-shadow .25s;
   }
   #drop::after {
     content: ''; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
     opacity: 0; transition: opacity .25s;
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--accent-soft) 60%, transparent),
-      0 0 38px -6px color-mix(in oklab, var(--accent) 55%, transparent);
+      0 0 46px -6px color-mix(in oklab, var(--accent) 55%, transparent);
   }
-  #drop:hover { border-color: color-mix(in oklab, var(--accent) 45%, transparent); }
-  #drop strong { display: block; margin-bottom: 5px; font-size: 15px; font-weight: 600; }
-  #drop span { color: var(--s300); font-size: 12px; }
-  /* Real drag-and-drop state: an accent-tinted glass edge, not just a border swap. */
-  #drop.hot {
-    border-color: color-mix(in oklab, var(--accent-soft) 88%, transparent);
-    background-color: color-mix(in oklab, var(--accent) 13%, transparent);
-    background-image:
-      linear-gradient(180deg, color-mix(in oklab, var(--accent) 18%, transparent), transparent 65%),
-      radial-gradient(90% 120% at 50% -30%, color-mix(in oklab, var(--accent-soft) 16%, transparent), transparent 60%);
+  .drop-well {
+    position: relative; display: grid; place-items: center;
+    width: 58px; height: 58px; margin: 0 auto 14px;
+    border-radius: 18px; color: var(--ice);
+    border: 1px solid color-mix(in oklab, var(--s100) 14%, transparent);
+    background-color: color-mix(in oklab, var(--s900) 58%, transparent);
+    background-image: linear-gradient(170deg, color-mix(in oklab, var(--s100) 11%, transparent), transparent 60%);
     box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, var(--accent-soft) 45%, transparent),
-      inset 0 -1px 0 0 color-mix(in oklab, black 45%, transparent),
-      inset 0 0 46px -14px color-mix(in oklab, var(--accent) 80%, transparent),
-      0 16px 44px -20px color-mix(in oklab, var(--accent) 65%, transparent);
+      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 18%, transparent),
+      0 10px 24px -14px rgb(0 0 0 / .9),
+      0 0 30px -12px color-mix(in oklab, var(--ice) 70%, transparent);
+    transition: color .25s, border-color .25s, box-shadow .3s, scale .25s;
+  }
+  .drop-well svg { width: 26px; height: 26px; }
+  /* A slow halo, so the drop target is the thing the eye lands on. */
+  .drop-well::after {
+    content: ''; position: absolute; inset: -8px; border-radius: 26px;
+    pointer-events: none; animation: var(--pulse);
+  }
+  #drop:hover { border-color: color-mix(in oklab, var(--ice) 55%, transparent); }
+  #drop:hover .drop-well {
+    color: var(--s100); border-color: color-mix(in oklab, var(--ice) 55%, transparent);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 26%, transparent),
+      0 12px 28px -14px rgb(0 0 0 / .9),
+      0 0 40px -8px color-mix(in oklab, var(--ice) 85%, transparent);
+    scale: 1.04;
+  }
+  #drop strong { display: block; font-size: 16px; font-weight: 600; letter-spacing: .01em; }
+  .drop-sub {
+    display: block; margin: 6px auto 0; max-width: 30rem;
+    font-size: 12.5px; color: var(--s300);
+    /* CJK has no word gaps, so a plain overflow break lands mid-word
+       ("按数 / 字排序"); balance the two lines when it does wrap. */
+    text-wrap: balance;
+  }
+  .drop-state { display: block; margin-top: 12px; font-size: 12px; letter-spacing: .04em; color: var(--ice); }
+  .drop-state .s-hot { display: none; }
+  /* Real drag state: the dashed target closes and floods with light. */
+  #drop.hot {
+    border-style: solid;
+    border-color: color-mix(in oklab, var(--accent-soft) 90%, transparent);
+    background-color: color-mix(in oklab, var(--accent) 12%, transparent);
+    background-image:
+      radial-gradient(130% 90% at 50% -20%, color-mix(in oklab, var(--accent-soft) 20%, transparent), transparent 62%),
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 18%, transparent), transparent 60%);
+    box-shadow:
+      inset 0 2px 16px -6px rgb(0 0 0 / .95),
+      inset 0 0 60px -18px color-mix(in oklab, var(--accent) 85%, transparent),
+      0 18px 50px -22px color-mix(in oklab, var(--accent) 70%, transparent);
   }
   #drop.hot::after { opacity: 1; }
   #drop.hot strong { color: var(--accent-soft); }
+  #drop.hot .drop-state { color: var(--accent-soft); }
+  #drop.hot .drop-state .s-idle { display: none; }
+  #drop.hot .drop-state .s-hot { display: inline; }
+  #drop.hot .drop-well {
+    color: #17120a; border-color: color-mix(in oklab, var(--accent-soft) 70%, transparent);
+    background-color: color-mix(in oklab, var(--accent-soft) 85%, transparent);
+    background-image: none; scale: 1.06;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / .5),
+      0 0 44px -6px color-mix(in oklab, var(--accent) 85%, transparent);
+  }
 
-  .hint { margin-top: 12px; font-size: 12px; color: var(--s300); }
+  .hint { margin: 12px 2px 0; font-size: 12.5px; color: var(--s300); }
 
-  .bar { position: relative; height: 3px; margin-top: 12px; border-radius: 999px; overflow: hidden;
+  .bar { position: relative; height: 3px; margin-top: 14px; border-radius: 999px; overflow: hidden;
          background: color-mix(in oklab, var(--s100) 10%, transparent); }
   .bar > i {
     display: block; height: 100%; width: 35%;
@@ -259,68 +462,90 @@
     animation: slide 1.2s linear infinite;
   }
 
-  /* --- section headings ---------------------------------------------- */
-  h2 {
-    display: flex; align-items: center; gap: 10px;
-    margin: 32px 0 12px; font-size: 11px; font-weight: 600;
-    letter-spacing: .18em; text-transform: uppercase; color: var(--s300);
+  /* --- section heads --------------------------------------------------
+     Designed heads, not bold text: hairline dot, EN eyebrow over the CN
+     label, count pill, a right-aligned note, then a glass-divider. */
+  .sec { margin-top: 36px; }
+  /* flex-end: the right-hand note shares the baseline of the CN label, not the
+     centre of the two-line block (which left the dot floating mid-column). */
+  .sec-head { display: flex; align-items: flex-end; gap: 12px; padding: 0 2px; }
+  .sec-label { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .sec-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sec-eyebrow {
+    font-size: 10px; font-weight: 600; letter-spacing: .24em; text-transform: uppercase;
+    color: color-mix(in oklab, var(--s200) 72%, var(--ice));
   }
-  h2::after {
-    content: ''; flex: 1 1 auto; height: 1px;
-    background: linear-gradient(90deg, color-mix(in oklab, var(--s100) 16%, transparent), transparent);
+  .sec-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .02em; color: var(--s100); }
+  .sec-tail {
+    margin-left: auto; font-size: 11px; letter-spacing: .1em; color: var(--s300);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
   }
+  .sec > .glass-divider { margin-top: 11px; }
   .tag {
-    padding: 2px 9px; border-radius: 999px; font-size: 11px; color: var(--s100);
-    font-variant-numeric: tabular-nums; letter-spacing: .02em;
-    border: 1px solid color-mix(in oklab, var(--s100) 14%, transparent);
-    background: color-mix(in oklab, var(--s100) 7%, transparent);
-    box-shadow: inset 0 1px 0 0 color-mix(in oklab, var(--s100) 14%, transparent);
+    flex: none; padding: 2px 10px; border-radius: 999px; font-size: 11px; line-height: 1.55;
+    color: var(--s100); font-variant-numeric: tabular-nums; letter-spacing: .02em;
+    border: 1px solid color-mix(in oklab, var(--s100) 16%, transparent);
+    background-color: color-mix(in oklab, var(--s100) 8%, transparent);
+    box-shadow: inset 0 1px 0 0 color-mix(in oklab, var(--s100) 16%, transparent);
   }
 
-  /* --- rows: thin glass surfaces ------------------------------------- */
-  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+  /* --- rows: liquid-glass-thin ---------------------------------------
+     One row height for every row in both lists (thumb + padding decides it),
+     so the two lists share a baseline grid. */
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
   li.item {
     position: relative; isolation: isolate;
-    display: flex; gap: 12px; align-items: center; padding: 10px 13px;
+    display: flex; gap: 14px; align-items: center; padding: 8px; min-height: 80px;
     border-radius: 14px;
-    border: 1px solid color-mix(in oklab, var(--s100) 10%, transparent);
-    background-color: color-mix(in oklab, var(--s900) 52%, transparent);
-    background-image: linear-gradient(170deg, color-mix(in oklab, var(--s100) 6%, transparent), transparent 55%);
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    border: 1px solid color-mix(in oklab, var(--s100) 14%, transparent);
+    background-color: color-mix(in oklab, var(--s850) 50%, transparent);
+    background-image: linear-gradient(172deg, color-mix(in oklab, var(--s100) 8%, transparent), transparent 52%);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
     box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 16%, transparent),
-      0 6px 20px -12px rgb(0 0 0 / .6);
+      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 22%, transparent),
+      inset 0 -1px 0 0 color-mix(in oklab, black 40%, transparent),
+      0 12px 30px -16px rgb(0 0 0 / .75);
     transition: border-color .2s, box-shadow .25s, background-color .2s;
   }
   li.item::before {
-    content: ''; position: absolute; left: 0; top: 11px; bottom: 11px; width: 2px;
+    content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px;
     border-radius: 0 2px 2px 0;
     background: linear-gradient(180deg, var(--accent-soft), var(--ember));
     opacity: 0; transition: opacity .22s;
   }
   li.item:hover {
     border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+    background-color: color-mix(in oklab, var(--s850) 60%, transparent);
     box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 22%, transparent),
-      0 12px 30px -14px rgb(0 0 0 / .8),
+      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 28%, transparent),
+      inset 0 -1px 0 0 color-mix(in oklab, black 40%, transparent),
+      0 16px 36px -16px rgb(0 0 0 / .85),
       0 0 0 1px color-mix(in oklab, var(--accent) 20%, transparent);
   }
   li.item:hover::before { opacity: .95; }
 
-  li.item img {
-    width: 54px; height: 54px; flex: none;
-    object-fit: cover; border-radius: 10px; background: #202028;
+  /* Preview inside an artwork-mat well. The mat ring is the element's own
+     padding, which is why the tile is 64px around a 56px picture. */
+  li.item img, li.item .ph {
+    width: 64px; height: 64px; flex: none; border-radius: 16px;
+    background-color: color-mix(in oklab, var(--s950) 72%, transparent);
     box-shadow:
-      0 0 0 1px color-mix(in oklab, var(--s100) 14%, transparent),
-      0 8px 18px -10px rgb(0 0 0 / .9);
+      inset 0 2px 14px -4px rgb(0 0 0 / .95),
+      inset 0 0 0 1px color-mix(in oklab, var(--s100) 7%, transparent),
+      0 1px 0 0 color-mix(in oklab, var(--s100) 10%, transparent);
   }
-  /* PSD placeholder: checkerboard (transparency indicator) reads as a real asset tile. */
+  li.item img { padding: 4px; object-fit: cover; }
+  /* PSD placeholder: a mini checkerboard (transparency indicator) inside the
+     same mat ring, so a missing preview still reads as a real asset tile. */
   .ph {
-    width: 54px; height: 54px; flex: none; border-radius: 10px;
+    position: relative; z-index: 0;
     display: grid; place-items: center;
-    font-size: 10px; font-weight: 700; letter-spacing: .1em;
-    color: var(--s100); text-shadow: 0 1px 3px rgb(0 0 0 / .9);
+    font-size: 9px; font-weight: 700; letter-spacing: .14em;
+    color: var(--s300); text-shadow: 0 1px 3px rgb(0 0 0 / .9);
+  }
+  .ph::before {
+    content: ''; position: absolute; inset: 4px; z-index: -1; border-radius: 12px;
     background-color: #1c1c24;
     background-image:
       linear-gradient(45deg, #2a2a33 25%, transparent 25%),
@@ -329,23 +554,72 @@
       linear-gradient(-45deg, transparent 75%, #2a2a33 75%);
     background-size: 16px 16px;
     background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-    box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, var(--s100) 18%, transparent),
-      0 0 0 1px color-mix(in oklab, var(--s100) 12%, transparent),
-      0 8px 18px -10px rgb(0 0 0 / .9);
   }
   .meta { min-width: 0; flex: 1; }
-  .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .detail { margin-top: 2px; font-size: 12px; color: var(--s300); }
+  /* Date (or file name) is the primary label; everything else is secondary. */
+  .name {
+    font-size: 14.5px; font-weight: 600; letter-spacing: .01em; line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* An archived row is one date, so it is set in the display serif - the same
+     face the gallery gives its timeline dates. */
+  #works .name { font-family: var(--font-display); font-size: 16.5px; letter-spacing: .02em; }
+  .detail {
+    margin-top: 3px; font-size: 12px; line-height: 1.45; color: var(--s300);
+    overflow-wrap: anywhere;
+  }
   .ok { color: var(--ok); }
   .bad { color: var(--bad); }
-  .draft-head { display: flex; align-items: baseline; gap: 9px; margin: 18px 0 9px; }
-  .draft-head b { font-weight: 600; font-size: 14px; letter-spacing: .01em; }
-  .draft-head span { color: var(--s300); font-size: 12px; }
-  .actions { margin-top: 18px; }
+
+  /* Draft group inside 待发布草稿: a quiet sub-head above the rows. */
+  .draft-head { display: flex; align-items: baseline; gap: 10px; margin: 20px 2px 10px; }
+  #drafts > .draft-head:first-child { margin-top: 14px; }
+  .draft-head b { font-weight: 600; font-size: 13px; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+  .draft-head span { font-size: 11.5px; color: var(--s300); }
+  .draft-head span::before { content: '·'; margin-right: 7px; color: var(--s400); }
+
+  /* --- empty states ---------------------------------------------------
+     「还没有草稿」 arrives as a bare <p class="hint"> and the empty archive as
+     a row with no name. Both are styled into intentional placeholder cards -
+     the page must not look broken when there is nothing to show. */
+  #drafts > .hint {
+    margin: 14px 0 0; padding: 48px 22px 24px; text-align: center;
+    border-radius: 18px; font-size: 12.5px; color: var(--s300);
+    border: 1px dashed color-mix(in oklab, var(--s100) 10%, transparent);
+    background-color: color-mix(in oklab, var(--s950) 62%, transparent);
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238fd0e8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v11'/%3E%3Cpath d='M7.5 9.5 12 14l4.5-4.5'/%3E%3Cpath d='M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5'/%3E%3C/svg%3E"),
+      radial-gradient(90% 130% at 50% -24%, color-mix(in oklab, var(--ice) 9%, transparent), transparent 64%);
+    background-repeat: no-repeat, no-repeat;
+    background-position: center 20px, center;
+    background-size: 24px 24px, auto;
+    box-shadow: inset 0 2px 16px -8px rgb(0 0 0 / .9);
+  }
+  #works > li.item:has(> .meta > .detail:only-child) {
+    flex-direction: column; justify-content: center; gap: 12px;
+    min-height: 150px; padding: 22px; text-align: center;
+    border-style: dashed; border-color: color-mix(in oklab, var(--s100) 12%, transparent);
+    background-image: none; background-color: color-mix(in oklab, var(--s950) 62%, transparent);
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    box-shadow: inset 0 2px 16px -8px rgb(0 0 0 / .9);
+  }
+  #works > li.item:has(> .meta > .detail:only-child) > .meta::before {
+    content: ''; display: block; height: 30px; margin-bottom: 12px;
+    background-repeat: no-repeat; background-position: center; background-size: 28px 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238fd0e8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4.5' width='18' height='15' rx='2.5'/%3E%3Cpath d='m3 16 4.5-4.5 4 4 3-3L21 17'/%3E%3Ccircle cx='9' cy='9' r='1.2'/%3E%3C/svg%3E");
+  }
+  #works > li.item:has(> .meta > .detail:only-child) > .meta { flex: none; }
+  #works > li.item:has(> .meta > .detail:only-child):hover {
+    border-color: color-mix(in oklab, var(--s100) 12%, transparent);
+    background-color: color-mix(in oklab, var(--s950) 62%, transparent);
+    box-shadow: inset 0 2px 16px -8px rgb(0 0 0 / .9);
+  }
+
+  .actions { margin-top: 22px; }
 
   #log {
-    margin-top: 16px; max-height: 240px; overflow: auto; padding: 14px;
+    margin-top: 18px; max-height: 240px; overflow: auto; padding: 14px 16px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 12px; line-height: 1.65; white-space: pre-wrap; color: var(--s200);
     border-radius: 14px;
@@ -367,13 +641,28 @@
     88%  { opacity: .5; }
     100% { transform: translate3d(130%, 0, 0) rotate(9deg) scale(1.5); opacity: 0; }
   }
-  @keyframes rim-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  /* Spin the gradient's start angle - the rim stays welded to the outline. */
+  @keyframes rim-spin { from { --rim-angle: 0deg; } to { --rim-angle: 360deg; } }
   @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(320%); } }
+  @keyframes drift {
+    from { transform: translate3d(-2%, -1%, 0) scale(1.05); }
+    to { transform: translate3d(2%, 1.5%, 0) scale(1.12); }
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ice) 42%, transparent); }
+    70% { box-shadow: 0 0 0 12px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
 
-  /* Without backdrop-filter the panes must still be readable: go opaque. */
-  @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  /* Without backdrop-filter the panes must still be readable: go opaque.
+     NOTE: test the STANDARD property only. An earlier version negated
+     `(backdrop-filter) or (-webkit-backdrop-filter)`; Chromium reports the
+     -webkit- alias as unsupported through CSS.supports(), so mixing it into
+     the condition is a trap - keep it exactly like src/index.css. */
+  @supports not (backdrop-filter: blur(2px)) {
     .panel { background-color: color-mix(in oklab, var(--s900) 94%, transparent); }
     li.item { background-color: color-mix(in oklab, var(--s900) 92%, transparent); }
+    #drop { background-color: color-mix(in oklab, var(--s950) 88%, transparent); }
   }
 
   @media (prefers-contrast: more) {
@@ -381,18 +670,25 @@
       background-color: color-mix(in oklab, var(--s950) 93%, transparent);
       border-color: color-mix(in oklab, var(--s100) 30%, transparent);
     }
-    .sheen { display: none; }
+    .sheen, .ambient::after { display: none; }
   }
 
+  @media (max-width: 720px) {
+    .sec-tail, .panel-tail { display: none; }
+  }
   @media (max-width: 560px) {
+    .wrap { padding: 28px 16px 64px; }
     h1 { font-size: 23px; }
     .panel { padding: 16px; }
-    #drop { padding: 26px 14px; }
+    #drop { padding: 24px 14px 22px; }
+    li.item { gap: 12px; }
+    .draft-head { flex-wrap: wrap; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .sheen::before, button.primary::before, .bar > i { animation: none !important; }
+    .sheen::before, button.primary::before, .bar > i,
+    .ambient::after, .drop-well::after { animation: none !important; }
     .sheen { opacity: .3; }
     *, *::before, *::after {
       animation-duration: .001ms !important;
@@ -420,7 +716,14 @@
   <section class="panel">
     <i class="sheen" aria-hidden="true"></i>
     <div class="pane-body">
-      <div class="row">
+      <div class="panel-head">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="panel-eyebrow">添加作品</span>
+        <span class="panel-tail">选日期 → 拖入 .psd → 发布</span>
+      </div>
+      <span class="glass-divider" aria-hidden="true"></span>
+
+      <div class="row fields">
         <div>
           <label for="date">放到的日期文件夹</label>
           <input type="date" id="date" />
@@ -433,8 +736,19 @@
       </div>
 
       <div id="drop">
+        <span class="drop-well" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v11" />
+            <path d="M7.5 9.5 12 14l4.5-4.5" />
+            <path d="M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5" />
+          </svg>
+        </span>
         <strong>把 .psd 文件拖到这里</strong>
-        <span>可以一次拖多个；文件名会自动改成 1.psd、2.psd… 按数字排序</span>
+        <span class="drop-sub">可以一次拖多个；文件名会自动改成 1.psd、2.psd… 按数字排序</span>
+        <span class="drop-state">
+          <span class="s-idle">或点这里选择文件</span>
+          <span class="s-hot">松开鼠标即开始上传</span>
+        </span>
       </div>
       <input type="file" id="file" accept=".psd" multiple class="hidden" />
       <div id="progress-bar" class="bar hidden"><i></i></div>
@@ -442,15 +756,42 @@
     </div>
   </section>
 
-  <h2>待发布草稿 <span id="draft-count" class="tag">0</span></h2>
+  <div class="sec">
+    <div class="sec-head">
+      <div class="sec-label">
+        <span class="sec-eyebrow" aria-hidden="true">Pending drafts</span>
+        <div class="sec-title">
+          <span class="dot" aria-hidden="true"></span>
+          <h2>待发布草稿</h2>
+          <span id="draft-count" class="tag">0</span>
+        </div>
+      </div>
+      <span class="sec-tail">上传后点「发布」才进图库</span>
+    </div>
+    <span class="glass-divider" aria-hidden="true"></span>
+  </div>
   <div id="drafts"></div>
   <div class="row actions">
     <button id="publish" class="primary" disabled>发布（提交并推送）</button>
-    <button id="refresh">刷新</button>
+    <button id="refresh" class="ghost">刷新</button>
+    <span class="cta-note">还没有草稿：先把 .psd 拖进上面的面板</span>
   </div>
   <div id="log" class="hidden"></div>
 
-  <h2>已归档作品 <span id="work-count" class="tag">0</span></h2>
+  <div class="sec">
+    <div class="sec-head">
+      <div class="sec-label">
+        <span class="sec-eyebrow" aria-hidden="true">Archived works</span>
+        <div class="sec-title">
+          <span class="dot ice" aria-hidden="true"></span>
+          <h2>已归档作品</h2>
+          <span id="work-count" class="tag">0</span>
+        </div>
+      </div>
+      <span class="sec-tail">works/ 目录 · 只读</span>
+    </div>
+    <span class="glass-divider" aria-hidden="true"></span>
+  </div>
   <ul id="works"></ul>
 </div>
 

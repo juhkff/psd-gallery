@@ -81,9 +81,17 @@
     88%  { opacity: 0.5; }
     100% { transform: translate3d(130%, 0, 0) rotate(9deg) scale(1.5); opacity: 0; }
   }
+  /*
+   * The rim is animated by interpolating the CONIC GRADIENT ANGLE, not by
+   * rotating the pseudo-element box. `transform: rotate()` on the ::before
+   * rotates the box itself, so on any element wider than it is tall (a pill
+   * button) the masked ring swings outside the border box and paints a stray
+   * arc across the page. Registering the angle with @property makes it
+   * animatable; without @property support the ring is simply static.
+   */
   @keyframes rim-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from { --rim-angle: 0deg; }
+    to { --rim-angle: 360deg; }
   }
   @keyframes liquid-float {
     0%, 100% { transform: translate3d(0, 0, 0); }
@@ -93,6 +101,17 @@
     0%, 100% { opacity: 0.55; }
     50% { opacity: 0.9; }
   }
+}
+
+/*
+ * Registered custom property: without `@property` an angle in a gradient cannot
+ * be interpolated, and the rim would sit static at its initial value. Browsers
+ * without support simply never animate it - a graceful degrade.
+ */
+@property --rim-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
 }
 
 @layer base {
@@ -286,10 +305,11 @@
   opacity: 1;
 }
 
-/* Thin rotating highlight on the rim - reserve for primary calls to action. */
+/* Thin travelling highlight on the rim - reserve for primary calls to action. */
 @utility liquid-rim {
   position: relative;
   isolation: isolate;
+  --rim-angle: 0deg;
 
   &::before {
     content: '';
@@ -298,11 +318,11 @@
     border-radius: inherit;
     padding: 1px;
     background: conic-gradient(
-      from 0deg,
+      from var(--rim-angle),
       transparent 0deg,
-      color-mix(in oklab, var(--color-accent-soft) 85%, transparent) 60deg,
-      color-mix(in oklab, var(--color-ice) 70%, transparent) 130deg,
-      transparent 200deg,
+      color-mix(in oklab, var(--color-studio-100) 92%, transparent) 58deg,
+      color-mix(in oklab, var(--color-ice) 85%, transparent) 112deg,
+      transparent 190deg,
       transparent 360deg
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -342,21 +362,37 @@
  */
 @utility studio-backdrop {
   /*
-   * Positioned with LENGTHS, not percentages. The element is stretched over the
-   * full document height (see App), so `%` positions would put every pool at a
-   * fraction of the whole page - the top of the page would be a dark band and
-   * the pools would drift as the library grows. `vw` keeps them anchored to the
-   * top of the content at any page height, and `background-attachment: fixed`
-   * keeps the light source steady while scrolling.
+   * Ambient light, stretched over the whole document (see App.tsx) rather than
+   * one viewport - a `fixed inset-0` layer only lights the first screen, which
+   * is why everything below the fold used to be flat black.
+   *
+   * Positions are LENGTHS, not percentages: the element spans the full document
+   * height, so `%` would place each pool at a fraction of the whole page - the
+   * top would be a dark band and the pools would drift as the library grows.
+   * `vw`/`vh` anchor them to the top of the content at any page height, and
+   * `background-attachment: fixed` keeps the light source steady while scrolling.
+   *
+   * Each `color-mix` takes exactly two colour stops; the pool strength lives in
+   * the percentage of the first stop.
    */
   background-attachment: fixed;
   background-repeat: no-repeat;
   background-image:
-    radial-gradient(58rem 38rem at 6vw -14vh, color-mix(in oklab, var(--color-accent) 40%, transparent 66%),
-    radial-gradient(46rem 34rem at 94vw 6vh, color-mix(in oklab, var(--color-ion) 46%, transparent 68%),
-    radial-gradient(52rem 40rem at 46vw 120vh, color-mix(in oklab, var(--color-ember) 38%, transparent 70%),
-    radial-gradient(34rem 26rem at 76vw 78vh, color-mix(in oklab, var(--color-ice) 26%, transparent 68%),
-    radial-gradient(28rem 22rem at 20vw 52vh, color-mix(in oklab, var(--color-ion) 24%, transparent 70%);
+    radial-gradient(58rem 38rem at 6vw -14vh,
+      color-mix(in oklab, var(--color-accent) 40%, transparent),
+      transparent 66%),
+    radial-gradient(46rem 34rem at 94vw 6vh,
+      color-mix(in oklab, var(--color-ion) 46%, transparent),
+      transparent 68%),
+    radial-gradient(52rem 40rem at 46vw 120vh,
+      color-mix(in oklab, var(--color-ember) 38%, transparent),
+      transparent 70%),
+    radial-gradient(34rem 26rem at 76vw 78vh,
+      color-mix(in oklab, var(--color-ice) 26%, transparent),
+      transparent 68%),
+    radial-gradient(28rem 22rem at 20vw 52vh,
+      color-mix(in oklab, var(--color-ion) 24%, transparent),
+      transparent 70%);
 }
 
 /*
