@@ -89,12 +89,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // SAFETY PREFLIGHT. Cleanup resets the repo to origin/main to remove this
-  // test's own commit. If there is uncommitted tracked work, that reset would
-  // silently destroy it - so refuse to start instead. Untracked files survive a
-  // reset but are listed too, so the message is honest about what is at risk.
+  // SAFETY PREFLIGHT. This test publishes into the real repository, so cleanup
+  // removes its own commit with a hard reset. That can only ever be safe on a
+  // clean tree, and it must reset to the pre-test HEAD (not origin/main) or it
+  // would also discard local commits ahead of origin - which is exactly how a
+  // full unreleased redesign was destroyed once. Refuse anything but clean.
   const dirty = git(['status', '--porcelain']).stdout.trim();
-  if (dirty !== '' && !process.argv.includes('--allow-dirty')) {
+  if (dirty !== '') {
     console.error(
       [
         '',
@@ -104,8 +105,7 @@ async function main(): Promise<void> {
         ...dirty.split('\n').slice(0, 20).map((line) => `    ${line}`),
         dirty.split('\n').length > 20 ? `    … and ${dirty.split('\n').length - 20} more` : '',
         '',
-        '  Commit or stash first, then re-run. Pass --allow-dirty to override',
-        '  (only if you are certain the tracked changes may be discarded).',
+        '  Commit or stash first, then re-run.',
         '',
       ].filter((line) => line !== undefined).join('\n'),
     );
@@ -255,18 +255,22 @@ async function main(): Promise<void> {
 
     // leave the repo exactly as we found it (unless --keep was passed)
     if (!process.argv.includes('--keep')) {
-      git(['fetch', '--quiet', 'origin']);
-      const reset = git(['reset', '--hard', '--quiet', 'origin/main']);
+      // Restore the commit we started from - NOT origin/main. Resetting to
+      // origin/main silently discards every local commit ahead of origin: this
+      // test publishes into the real repo, so the earlier `reset --hard
+      // origin/main` destroyed a full redesign commit that had not been pushed
+      // yet. `headBefore` is the only value that means "exactly as we found it".
+      const reset = git(['reset', '--hard', '--quiet', headBefore]);
       fs.rmSync(path.join(ROOT, 'works', TEST_DATE), { recursive: true, force: true });
       fs.rmSync(path.join(ROOT, 'works', '.incoming'), { recursive: true, force: true });
-      if (reset.status === 0) console.log(`\n  (restored the repo to origin/main: ${headBefore.slice(0, 12)} was the pre-test HEAD)`);
+      if (reset.status === 0) console.log(`\n  (restored the repo to the pre-test HEAD ${headBefore.slice(0, 12)})`);
     }
   }
 
   const failed = checks.filter((item) => !item.ok);
   console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`);
   if (failed.length === 0) {
-    console.log('\n  The repo was restored to origin/main (pass --keep to inspect the test commit).');
+    console.log(`\n  The repo was restored to the pre-test HEAD ${headBefore.slice(0, 12)} (pass --keep to inspect the test commit).`);
     process.exit(0);
   } else {
     for (const item of failed) console.error(`  FAILED: ${item.name} — ${item.detail}`);
